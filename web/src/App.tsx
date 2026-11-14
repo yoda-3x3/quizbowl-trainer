@@ -23,13 +23,8 @@ import EarTraining from './screens/EarTraining';
 import PacketImport from './screens/Import';
 import SettingsScreen from './screens/Settings';
 import Rooms from './screens/Rooms';
+import OacMatch from './screens/OacMatch';
 import { Button, Sheet, TabBar, type TabItem } from './ui';
-
-// TODO(card swap): `src/screens/OacMatch.tsx` is still being written by another
-// agent. When it lands, add
-//   import OacMatch from './screens/OacMatch';
-// and replace the <Pending ... file="src/screens/OacMatch.tsx" /> below with
-// <OacMatch />. Nothing else in this file needs to change.
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -102,11 +97,9 @@ function Practice({
       );
     case 'oac':
       return (
-        <Pending
-          title="OAC match"
-          file="src/screens/OacMatch.tsx"
-          onExit={onExit}
-        />
+        <Screen title="OAC match" onExit={onExit}>
+          <OacMatch />
+        </Screen>
       );
     case 'import':
       return (
@@ -143,31 +136,5 @@ function Screen({
       </header>
       <div className="app__body">{children}</div>
     </>
-  );
-}
-
-/** Placeholder for a screen another card is still building. */
-function Pending({
-  title,
-  file,
-  onExit,
-}: {
-  title: string;
-  file: string;
-  onExit(): void;
-}) {
-  return (
-    <Screen title={title} onExit={onExit}>
-      <Sheet title="Not wired up yet">
-        <p className="tiny muted">
-          This mode is being built in <code>{file}</code>. The entry point is
-          here and ready for it, so nothing in the shell has to change when it
-          lands.
-        </p>
-        <Button small onClick={onExit}>
-          Back to practice
-        </Button>
-      </Sheet>
-    </Screen>
   );
 }
