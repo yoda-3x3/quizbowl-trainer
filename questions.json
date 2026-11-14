@@ -1,0 +1,198 @@
+{
+  "tossups": [
+    {
+      "category": "Painting",
+      "text": "This artist depicted a man in a bowler hat obscured by a green apple in The Son of Man, and he placed a locomotive emerging from a fireplace in Time Transfixed. (*) A pipe accompanied by the caption \"Ceci n'est pas une pipe\" appears in this artist's The Treachery of Images. This painter of The Human Condition depicted men in bowler hats raining from the sky in Golconda.",
+      "answer": "René Magritte",
+      "accept": ["Magritte", "Rene Magritte"]
+    },
+    {
+      "category": "Sculpture",
+      "text": "This sculptor's studies of horses in motion informed his design for the Monument to Gattamelata, and he created a bronze David that was the first freestanding nude since antiquity. (*) He designed the octagonal lantern atop Florence Cathedral and rediscovered linear perspective while studying the Baptistery. This sculptor of the bronze doors competition loser \"Sacrifice of Isaac\" trained Michelangelo's teacher.",
+      "answer": "Filippo Brunelleschi",
+      "accept": ["Brunelleschi", "Filippo Brunelleschi"]
+    },
+    {
+      "category": "Music",
+      "text": "This composer's Symphony No. 6 is subtitled \"Pathetique\" and premiered days before his death. (*) He wrote a ballet featuring the Sugar Plum Fairy and the Nutcracker Prince, and another ballet in which Prince Siegfried falls for Odette. This composer of the 1812 Overture also wrote Swan Lake.",
+      "answer": "Pyotr Ilyich Tchaikovsky",
+      "accept": ["Tchaikovsky", "Peter Tchaikovsky", "Pyotr Tchaikovsky"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist's Rouen Cathedral series depicts the same facade under changing light at different times of day. (*) He painted his wife Camille on her deathbed, and a work by him showing orange and blue brushstrokes of a harbor at dawn gave a movement its name. This painter of the Water Lilies series at Giverny painted Impression, Sunrise.",
+      "answer": "Claude Monet",
+      "accept": ["Monet", "Claude Monet"]
+    },
+    {
+      "category": "Architecture",
+      "text": "This architect's Fallingwater is built directly over a waterfall in rural Pennsylvania. (*) He developed the \"Prairie School\" style and designed the spiraling ramp of the Guggenheim Museum in New York. This architect designed Taliesin as his home and studio in Wisconsin.",
+      "answer": "Frank Lloyd Wright",
+      "accept": ["Wright", "Frank Lloyd Wright"]
+    },
+    {
+      "category": "Music",
+      "text": "This composer went completely deaf by the time he wrote his Ninth Symphony, which sets Schiller's \"Ode to Joy\" in its final movement. (*) His only opera is Fidelio, and his Third Symphony was originally dedicated to Napoleon before he angrily renamed it \"Eroica.\" This composer wrote a Fifth Symphony that opens with a four-note motif often described as \"fate knocking at the door.\"",
+      "answer": "Ludwig van Beethoven",
+      "accept": ["Beethoven", "Ludwig van Beethoven", "Ludwig Beethoven"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist cut off part of his own ear after an argument with Paul Gauguin in Arles. (*) He painted a swirling night sky over a village beneath a cypress tree, and a series of paintings depicting sunflowers in a vase. This Dutch Post-Impressionist painted Starry Night and cut off his ear.",
+      "answer": "Vincent van Gogh",
+      "accept": ["van Gogh", "Vincent van Gogh", "Vincent Van Gogh"]
+    },
+    {
+      "category": "Sculpture",
+      "text": "This sculptor's The Gates of Hell was commissioned for a Paris museum and includes a smaller figure of a seated, brooding man resting his chin on his hand. (*) He sculpted a group of six burghers with nooses around their necks for a city in northern France. This sculptor of The Kiss and The Thinker also made a bronze of Balzac.",
+      "answer": "Auguste Rodin",
+      "accept": ["Rodin", "Auguste Rodin"]
+    },
+    {
+      "category": "Music",
+      "text": "This composer's Requiem was left unfinished at his death and was completed by his student Franz Xaver Süssmayr. (*) He wrote an opera in which Papageno the bird-catcher helps Prince Tamino rescue Pamina, called The Magic Flute. This composer of Don Giovanni and The Marriage of Figaro was a child prodigy from Salzburg.",
+      "answer": "Wolfgang Amadeus Mozart",
+      "accept": ["Mozart", "Wolfgang Mozart", "Wolfgang Amadeus Mozart"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist's Guernica depicts the bombing of a Basque town during the Spanish Civil War in monochrome grays and blacks. (*) He co-founded Cubism with Georges Braque and went through a \"Blue Period\" characterized by melancholic figures. This Spanish painter created Les Demoiselles d'Avignon.",
+      "answer": "Pablo Picasso",
+      "accept": ["Picasso", "Pablo Picasso"]
+    },
+    {
+      "category": "Architecture",
+      "text": "This architect designed a glass pyramid entrance for the Louvre in Paris. (*) He also designed the East Building of the National Gallery of Art in Washington, D.C., using sharp triangular forms. This Chinese-American architect designed the Bank of China Tower in Hong Kong.",
+      "answer": "I. M. Pei",
+      "accept": ["Pei", "I.M. Pei", "Ieoh Ming Pei"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist's American Gothic depicts a farmer holding a pitchfork standing beside a woman in front of a house with a Gothic window. (*) He was a leading figure of the Regionalism movement centered in the American Midwest. This painter from Iowa depicted his sister and his dentist as the models for American Gothic.",
+      "answer": "Grant Wood",
+      "accept": ["Wood", "Grant Wood"]
+    },
+    {
+      "category": "Music",
+      "text": "This composer wrote a set of four violin concertos collectively titled The Four Seasons. (*) He was known as \"The Red Priest\" for his hair color and his ordination in Venice, where he taught at an orphanage for girls. This Baroque composer wrote hundreds of concertos, many of them for solo violin.",
+      "answer": "Antonio Vivaldi",
+      "accept": ["Vivaldi", "Antonio Vivaldi"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist painted a nighttime diner scene called Nighthawks, showing isolated figures under fluorescent light. (*) He often depicted lonely American figures in motels, offices, and gas stations bathed in stark light. This painter of Automat and Office in a Small City is considered a master of American Realism.",
+      "answer": "Edward Hopper",
+      "accept": ["Hopper", "Edward Hopper"]
+    },
+    {
+      "category": "Sculpture",
+      "text": "This sculptor carved a colossal statue of a shepherd boy from a single block of flawed marble, unveiling it in the Piazza della Signoria in Florence. (*) He painted the ceiling of the Sistine Chapel and later its altar wall with The Last Judgment. This sculptor of the Pietà and David also designed the dome of St. Peter's Basilica.",
+      "answer": "Michelangelo",
+      "accept": ["Michelangelo Buonarroti", "Michelangelo di Lodovico Buonarroti Simoni"]
+    },
+    {
+      "category": "Music",
+      "text": "This composer's Symphony No. 9, subtitled \"From the New World,\" incorporates melodies inspired by African-American spirituals and Native American music. (*) He wrote this symphony while directing a conservatory in New York City. This Czech composer also wrote a set of Slavonic Dances and the opera Rusalka.",
+      "answer": "Antonín Dvořák",
+      "accept": ["Dvorak", "Antonin Dvorak"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist's The Persistence of Memory features melting pocket watches draped over a barren landscape. (*) He collaborated with Luis Buñuel on the surrealist film Un Chien Andalou. This mustached Spanish Surrealist also designed the Chupa Chups logo.",
+      "answer": "Salvador Dalí",
+      "accept": ["Dali", "Salvador Dali"]
+    },
+    {
+      "category": "Architecture",
+      "text": "This architect designed the Sydney Opera House, whose roof shells resemble a series of interlocking sails or shells. (*) A dispute over cost overruns caused this Danish architect to resign before the building's completion in 1973. This architect never saw his finished Sydney Opera House in person.",
+      "answer": "Jørn Utzon",
+      "accept": ["Utzon", "Jorn Utzon"]
+    },
+    {
+      "category": "Music",
+      "text": "This composer's Rite of Spring caused a riot at its 1913 Paris premiere due to its dissonant rhythms and the choreography by Nijinsky. (*) He also composed the ballets The Firebird and Petrushka for Diaghilev's Ballets Russes. This Russian composer later became a leading figure of Neoclassicism.",
+      "answer": "Igor Stravinsky",
+      "accept": ["Stravinsky", "Igor Stravinsky"]
+    },
+    {
+      "category": "Painting",
+      "text": "This artist painted a self-portrait wearing a thorn necklace and another depicting herself in a plaster corset after a bus accident shattered her spine. (*) She was married to muralist Diego Rivera and often incorporated Mexican folk art traditions and monkeys into her self-portraits. This painter of The Two Fridas was known for her unibrow.",
+      "answer": "Frida Kahlo",
+      "accept": ["Kahlo", "Frida Kahlo"]
+    }
+  ],
+  "bonuses": [
+    {
+      "category": "Painting",
+      "leadin": "Answer the following about Dutch Golden Age painters, for 10 points each.",
+      "parts": [
+        {"clue": "This painter of The Night Watch and Self-Portrait with Two Circles went blind and bankrupt late in life.", "answer": "Rembrandt (van Rijn)", "accept": ["Rembrandt", "Rembrandt van Rijn"]},
+        {"clue": "This painter depicted a servant girl wearing an exotic turban and a large pearl earring in a famous \"tronie.\"", "answer": "Johannes Vermeer", "accept": ["Vermeer", "Johannes Vermeer", "Jan Vermeer"]},
+        {"clue": "This painter's Hunters in the Snow shows three weary hunters returning to a village; he also painted The Tower of Babel.", "answer": "Pieter Bruegel the Elder", "accept": ["Bruegel", "Pieter Bruegel", "Brueghel"]}
+      ]
+    },
+    {
+      "category": "Music",
+      "leadin": "Identify these Romantic-era composers, for 10 points each.",
+      "parts": [
+        {"clue": "This composer, a Hungarian virtuoso pianist, wrote the Hungarian Rhapsodies and pioneered the symphonic poem.", "answer": "Franz Liszt", "accept": ["Liszt", "Franz Liszt"]},
+        {"clue": "This Polish composer wrote almost exclusively for solo piano, including a set of 21 Nocturnes and many Mazurkas.", "answer": "Frédéric Chopin", "accept": ["Chopin", "Frederic Chopin"]},
+        {"clue": "This German composer, a close friend of the Schumanns, wrote a famous Lullaby and four symphonies without ever writing an opera.", "answer": "Johannes Brahms", "accept": ["Brahms", "Johannes Brahms"]}
+      ]
+    },
+    {
+      "category": "Sculpture/Architecture",
+      "leadin": "Answer the following about ancient wonders and monuments, for 10 points each.",
+      "parts": [
+        {"clue": "This 1889 iron lattice tower was built as the entrance arch for a World's Fair in Paris.", "answer": "the Eiffel Tower", "accept": ["Eiffel Tower"]},
+        {"clue": "This colossal statue in New York Harbor, a gift from France, was designed with an iron framework by Gustave Eiffel.", "answer": "the Statue of Liberty", "accept": ["Statue of Liberty"]},
+        {"clue": "This ancient Roman amphitheater in the center of Rome could hold an estimated 50,000 spectators for gladiatorial contests.", "answer": "the Colosseum", "accept": ["Colosseum", "Flavian Amphitheatre"]}
+      ]
+    },
+    {
+      "category": "Painting",
+      "leadin": "Identify these works of American art, for 10 points each.",
+      "parts": [
+        {"clue": "This Emanuel Leutze painting depicts a Founding Father standing in a boat crossing an icy river on Christmas night.", "answer": "Washington Crossing the Delaware", "accept": ["Washington Crossing the Delaware"]},
+        {"clue": "This Grant Wood painting depicts a stern farmer holding a pitchfork next to a woman in front of a Gothic-windowed house.", "answer": "American Gothic", "accept": ["American Gothic"]},
+        {"clue": "This Jackson Pollock technique involved flinging and dripping paint onto a canvas laid on the floor.", "answer": "drip painting (action painting)", "accept": ["drip painting", "action painting", "dripping"]}
+      ]
+    },
+    {
+      "category": "Music",
+      "leadin": "Answer the following about opera, for 10 points each.",
+      "parts": [
+        {"clue": "This Puccini opera follows a poor seamstress named Mimi and a poet named Rodolfo in the Latin Quarter of Paris.", "answer": "La Bohème", "accept": ["La Boheme"]},
+        {"clue": "This Bizet opera centers on a fiery Roma woman working in a Seville cigarette factory who seduces the soldier Don José.", "answer": "Carmen", "accept": ["Carmen"]},
+        {"clue": "This Verdi opera, set in ancient Egypt, follows the doomed love between an Ethiopian princess and an Egyptian military commander.", "answer": "Aida", "accept": ["Aida", "Aïda"]}
+      ]
+    },
+    {
+      "category": "Sculpture",
+      "leadin": "Identify these ancient Greek sculptures, for 10 points each.",
+      "parts": [
+        {"clue": "This armless marble statue of a goddess was discovered on the island of Melos in 1820 and is displayed in the Louvre.", "answer": "the Venus de Milo", "accept": ["Venus de Milo", "Aphrodite of Milos"]},
+        {"clue": "This bronze or marble statue type depicts an idealized nude male youth and was a staple of Archaic Greek sculpture.", "answer": "kouros", "accept": ["kouros", "kouroi"]},
+        {"clue": "This sculptor created the bronze Discobolus, depicting an athlete captured mid-throw.", "answer": "Myron", "accept": ["Myron"]}
+      ]
+    },
+    {
+      "category": "Architecture",
+      "leadin": "Answer the following about religious architecture, for 10 points each.",
+      "parts": [
+        {"clue": "This Byzantine church in Istanbul, later converted to a mosque and then a museum, is famed for its massive central dome.", "answer": "Hagia Sophia", "accept": ["Hagia Sophia", "Ayasofya"]},
+        {"clue": "This white marble mausoleum in Agra, India was built by Shah Jahan for his wife Mumtaz Mahal.", "answer": "the Taj Mahal", "accept": ["Taj Mahal"]},
+        {"clue": "This architectural style, epitomized by Notre-Dame de Paris, features flying buttresses, ribbed vaults, and pointed arches.", "answer": "Gothic architecture", "accept": ["Gothic", "Gothic architecture"]}
+      ]
+    },
+    {
+      "category": "Music",
+      "leadin": "Identify these ballets, for 10 points each.",
+      "parts": [
+        {"clue": "In this Tchaikovsky ballet, Prince Siegfried falls in love with Odette, a princess transformed into this titular bird by a sorcerer's curse.", "answer": "Swan Lake", "accept": ["Swan Lake"]},
+        {"clue": "This Tchaikovsky ballet follows Clara on Christmas Eve as her toy comes to life and battles the Mouse King.", "answer": "The Nutcracker", "accept": ["The Nutcracker", "Nutcracker"]},
+        {"clue": "This Stravinsky ballet, subtitled 'Pictures of Pagan Russia,' depicts a young girl dancing herself to death as a sacrifice.", "answer": "The Rite of Spring", "accept": ["The Rite of Spring", "Rite of Spring", "Le Sacre du printemps"]}
+      ]
+    }
+  ]
+}

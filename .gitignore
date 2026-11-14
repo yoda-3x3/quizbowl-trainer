@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.wrangler/
+.wrangler-dryrun/
+*.log
+
+# Legacy ear-training source audio. Large, already on disk, and only the
+# transcoded copies in web/public/audio ship.
+audio/*.wav
+
+# Legacy build output
+*.exe

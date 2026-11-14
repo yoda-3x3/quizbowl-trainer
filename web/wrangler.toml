@@ -1,0 +1,18 @@
+name = "quizbowl-rooms"
+main = "workers/room/index.ts"
+compatibility_date = "2024-11-27"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Room"]
+
+# Local dev:   npx wrangler dev
+# Deploy:      npx wrangler deploy
+#
+# The front end is a separate Cloudflare Pages project serving web/dist.
+# Point it at this Worker with a /api/* route once both are deployed.
