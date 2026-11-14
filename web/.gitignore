@@ -10,9 +10,14 @@ ios/
 # study and practice use, not for redistribution.
 src/import/__fixtures__/*.pdf
 src/import/__fixtures__/*.docx
+# A text extraction of a real packet is still the packet. The committed
+# *-synthetic.txt fixtures are written from scratch and are safe to ship.
+src/import/__fixtures__/real-*
 
 # Ear-training source audio; only the transcoded public/audio ships
 *.wav
 
 .wrangler/
 .wrangler-dryrun/
+
+*.tsbuildinfo
