@@ -11,7 +11,7 @@
  * bar stops being thumb-sized at 390px, and each of them is still one tap from
  * the Practice home.
  *
- * Learn is a placeholder here; another card fills it. Rooms renders the real
+ * Learn renders the scroll-driven study surface. Rooms renders the real
  * multiplayer screen, which already works against the Durable Object.
  */
 
@@ -23,8 +23,11 @@ import EarTraining from './screens/EarTraining';
 import PacketImport from './screens/Import';
 import SettingsScreen from './screens/Settings';
 import Rooms from './screens/Rooms';
+import Learn from './screens/Learn';
 import OacMatch from './screens/OacMatch';
-import { Button, Sheet, TabBar, type TabItem } from './ui';
+import { Button, TabBar, type TabItem } from './ui';
+import GetTheApp from './GetTheApp';
+import { isNativeOrInstalled } from './platform';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -42,27 +45,34 @@ export default function App() {
 
   const toHome = () => setPractice('home');
 
+  // Lite mode: a plain browser tab gets solo practice only. Read once per
+  // mount, since installing or leaving standalone reloads the document anyway.
+  const full = isNativeOrInstalled();
+
   return (
     <div className="app">
       {tab === 'practice' ? (
-        <Practice view={practice} onStart={setPractice} onExit={toHome} onOpenSettings={() => setTab('settings')} />
+        <Practice
+          view={practice}
+          full={full}
+          onStart={setPractice}
+          onExit={toHome}
+          onOpenSettings={() => setTab('settings')}
+        />
       ) : null}
 
-      {tab === 'learn' ? (
-        <Screen title="Learn">
-          <Sheet title="Coming next">
-            <p className="tiny muted">
-              Weak spots, missed questions and buzz-point distribution are
-              derived from the attempt log your practice is already writing.
-              Nothing here needs to be recorded in advance.
-            </p>
-          </Sheet>
-        </Screen>
-      ) : null}
+      {tab === 'learn' ? <Learn /> : null}
 
       {tab === 'rooms' ? (
         <Screen title="Rooms">
-          <Rooms />
+          {full ? (
+            <Rooms />
+          ) : (
+            <GetTheApp
+              feature="Multiplayer rooms are in the installed app."
+              reason="A room holds a live connection open for the whole match, which a browser tab drops the moment it goes to the background."
+            />
+          )}
         </Screen>
       ) : null}
 
@@ -75,11 +85,14 @@ export default function App() {
 
 function Practice({
   view,
+  full,
   onStart,
   onExit,
   onOpenSettings,
 }: {
   view: PracticeView;
+  /** False in a plain browser tab: packet import is app-only. */
+  full: boolean;
   onStart(mode: PracticeMode): void;
   onExit(): void;
   onOpenSettings(): void;
@@ -104,7 +117,14 @@ function Practice({
     case 'import':
       return (
         <Screen title="Import a packet" onExit={onExit}>
-          <PacketImport />
+          {full ? (
+            <PacketImport />
+          ) : (
+            <GetTheApp
+              feature="Packet import is in the installed app."
+              reason="Importing a set reads a file from your device and keeps the parsed questions on it."
+            />
+          )}
         </Screen>
       );
     default:
