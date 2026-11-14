@@ -1,439 +1,173 @@
 /**
- * Core harness. Card A replaces this with the real screens; it exists so the
- * engine can be exercised end to end and so there is something drillable while
- * the delegated UI work happens.
+ * App shell: four tabs at the bottom, one screen at a time.
+ *
+ * No router. The app is a single-screen-at-a-time PWA with four destinations
+ * and no deep links to honour yet, so a router would add a dependency and a
+ * history model for nothing. Practice keeps its own sub-view, so leaving the
+ * tab and coming back lands where you were.
+ *
+ * The bottom bar stays at Practice / Learn / Rooms / Settings. Ear training,
+ * OAC match and packet import are practice modes rather than tabs: a six item
+ * bar stops being thumb-sized at 390px, and each of them is still one tap from
+ * the Practice home.
+ *
+ * Learn is a placeholder here; another card fills it. Rooms renders the real
+ * multiplayer screen, which already works against the Durable Object.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
-import { useReader } from './engine/reader';
-import { append, all, isEphemeral } from './engine/log';
-import { TossupQueue, defaultFilters } from './data/qbreader';
-import { summary } from './learn/derive';
+import { useState, type ReactNode } from 'react';
+import Home, { type PracticeMode } from './screens/Home';
+import Tossup from './screens/Tossup';
+import Bonus from './screens/Bonus';
+import EarTraining from './screens/EarTraining';
+import PacketImport from './screens/Import';
+import SettingsScreen from './screens/Settings';
 import Rooms from './screens/Rooms';
-import type { AttemptEvent, Tossup } from './types';
+import { Button, Sheet, TabBar, type TabItem } from './ui';
 
-const WPM = 150;
-const POST_BUZZ_SECONDS = 5;
+// TODO(card swap): `src/screens/OacMatch.tsx` is still being written by another
+// agent. When it lands, add
+//   import OacMatch from './screens/OacMatch';
+// and replace the <Pending ... file="src/screens/OacMatch.tsx" /> below with
+// <OacMatch />. Nothing else in this file needs to change.
+
+type TabId = 'practice' | 'learn' | 'rooms' | 'settings';
+type PracticeView = 'home' | PracticeMode;
+
+const TABS: readonly TabItem<TabId>[] = [
+  { id: 'practice', label: 'Practice', glyph: '▶' },
+  { id: 'learn', label: 'Learn', glyph: '◈' },
+  { id: 'rooms', label: 'Rooms', glyph: '▦' },
+  { id: 'settings', label: 'Settings', glyph: '⚙' },
+];
 
 export default function App() {
-  const [view, setView] = useState<'solo' | 'rooms'>('solo');
+  const [tab, setTab] = useState<TabId>('practice');
+  const [practice, setPractice] = useState<PracticeView>('home');
+
+  const toHome = () => setPractice('home');
+
   return (
-    <div style={S.app}>
-      <nav style={S.nav}>
-        <button
-          onClick={() => setView('solo')}
-          style={{ ...S.navBtn, ...(view === 'solo' ? S.navOn : {}) }}
-        >
-          Solo
-        </button>
-        <button
-          onClick={() => setView('rooms')}
-          style={{ ...S.navBtn, ...(view === 'rooms' ? S.navOn : {}) }}
-        >
-          Rooms
-        </button>
-      </nav>
-      {view === 'solo' ? <Solo /> : <Rooms />}
+    <div className="app">
+      {tab === 'practice' ? (
+        <Practice view={practice} onStart={setPractice} onExit={toHome} onOpenSettings={() => setTab('settings')} />
+      ) : null}
+
+      {tab === 'learn' ? (
+        <Screen title="Learn">
+          <Sheet title="Coming next">
+            <p className="tiny muted">
+              Weak spots, missed questions and buzz-point distribution are
+              derived from the attempt log your practice is already writing.
+              Nothing here needs to be recorded in advance.
+            </p>
+          </Sheet>
+        </Screen>
+      ) : null}
+
+      {tab === 'rooms' ? (
+        <Screen title="Rooms">
+          <Rooms />
+        </Screen>
+      ) : null}
+
+      {tab === 'settings' ? <SettingsScreen /> : null}
+
+      <TabBar<TabId> items={TABS} active={tab} onSelect={setTab} />
     </div>
   );
 }
 
-function Solo() {
-  const queueRef = useRef(new TossupQueue(defaultFilters()));
-  const inputRef = useRef<HTMLInputElement>(null);
+function Practice({
+  view,
+  onStart,
+  onExit,
+  onOpenSettings,
+}: {
+  view: PracticeView;
+  onStart(mode: PracticeMode): void;
+  onExit(): void;
+  onOpenSettings(): void;
+}) {
+  switch (view) {
+    case 'tossup':
+      return <Tossup onExit={onExit} />;
+    case 'bonus':
+      return <Bonus onExit={onExit} />;
+    case 'ear':
+      return (
+        <Screen title="Ear training" onExit={onExit}>
+          <EarTraining />
+        </Screen>
+      );
+    case 'oac':
+      return (
+        <Pending
+          title="OAC match"
+          file="src/screens/OacMatch.tsx"
+          onExit={onExit}
+        />
+      );
+    case 'import':
+      return (
+        <Screen title="Import a packet" onExit={onExit}>
+          <PacketImport />
+        </Screen>
+      );
+    default:
+      return <Home onStart={onStart} onOpenSettings={onOpenSettings} />;
+  }
+}
 
-  const [current, setCurrent] = useState<Tossup | null>(null);
-  const [given, setGiven] = useState('');
-  const [events, setEvents] = useState<AttemptEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const handleResolved = useCallback((e: AttemptEvent) => {
-    void append(e).then(() => all().then(setEvents));
-  }, []);
-
-  const reader = useReader({
-    wpm: WPM,
-    postBuzzSeconds: POST_BUZZ_SECONDS,
-    onResolved: handleResolved,
-  });
-
-  const { reset, start, buzz, submit } = reader;
-
-  const loadNext = useCallback(async () => {
-    setLoading(true);
-    setGiven('');
-    const t = await queueRef.current.next();
-    setLoading(false);
-    if (!t) return;
-    setCurrent(t);
-    reset(t);
-    start();
-  }, [reset, start]);
-
-  useEffect(() => {
-    void all().then(setEvents);
-  }, []);
-
-  useEffect(() => {
-    void loadNext();
-  }, [loadNext]);
-
-  // Focus the field the moment a buzz opens it, and when a prompt arrives.
-  useEffect(() => {
-    if (reader.phase === 'buzzed' || reader.phase === 'done') {
-      inputRef.current?.focus();
-    }
-  }, [reader.phase, reader.pendingPrompt]);
-
-  // Space buzzes, but never while the answer field has focus.
-  useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
-      const target = ev.target as HTMLElement | null;
-      const typing =
-        target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
-      if (ev.code === 'Space' && !typing && reader.phase === 'reading') {
-        ev.preventDefault();
-        buzz();
-      }
-      if (ev.key === 'Enter' && reader.phase === 'resolved') {
-        ev.preventDefault();
-        void loadNext();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [buzz, loadNext, reader.phase]);
-
-  const stats = useMemo(() => summary(events), [events]);
-
-  const shown = reader.words.slice(0, reader.revealed);
-  const rest = reader.words.slice(reader.revealed);
-  const canAnswer = reader.phase === 'buzzed' || reader.phase === 'done';
-
-  const statusText = (() => {
-    switch (reader.phase) {
-      case 'reading':
-        return 'reading — SPACE to buzz';
-      case 'buzzed':
-        return reader.pendingPrompt
-          ? `PROMPT: ${reader.pendingPrompt}`
-          : `buzzed — ${reader.secondsLeft ?? 0}s`;
-      case 'done':
-        return 'end of question — answer anyway';
-      case 'resolved':
-        return 'ENTER for the next question';
-      default:
-        return loading ? 'loading…' : 'ready';
-    }
-  })();
-
-  const statusColor =
-    reader.phase === 'buzzed'
-      ? reader.pendingPrompt
-        ? 'var(--gold)'
-        : 'var(--accent)'
-      : 'var(--ink-soft)';
-
+/** Topbar plus body, for screens that render only their own content. */
+function Screen({
+  title,
+  onExit,
+  children,
+}: {
+  title: string;
+  onExit?(): void;
+  children: ReactNode;
+}) {
   return (
-    <div style={S.app}>
-      <header style={S.header}>
-        <div style={S.brand}>
-          quizbowl<span style={{ color: 'var(--ink-soft)' }}>/trainer</span>
-          <span style={S.coreTag}>core harness</span>
-        </div>
-        <div style={S.statRow}>
-          <Stat label="heard" value={String(stats.heard)} />
-          <Stat label="acc" value={pct(stats.accuracy)} />
-          <Stat label="power" value={pct(stats.powerRate)} />
-          <Stat label="neg" value={pct(stats.negRate)} />
-          <Stat
-            label="buzz pt"
-            value={
-              stats.meanBuzzFraction === null
-                ? '—'
-                : pct(stats.meanBuzzFraction)
-            }
-          />
-          <Stat label="pts" value={String(stats.points)} />
-        </div>
-      </header>
-
-      <main style={S.main}>
-        <div style={S.meta}>
-          <span>
-            {current
-              ? `${current.category} · ${current.subcategory}`
-              : 'no question'}
-          </span>
-          <span>
-            {current
-              ? `${current.setName}${current.setYear ? ` · ${current.setYear}` : ''} · diff ${current.difficulty}`
-              : ''}
-            {queueRef.current.isOffline ? ' · offline pack' : ''}
-          </span>
-        </div>
-
-        <div style={S.card}>
-          <p style={S.question}>
-            {shown.map((w, i) => (
-              <span
-                key={i}
-                style={
-                  reader.powerIndex !== null && i === reader.powerIndex
-                    ? { color: 'var(--gold)' }
-                    : undefined
-                }
-              >
-                {w}{' '}
-              </span>
-            ))}
-            {reader.phase === 'resolved' ? null : (
-              <span style={S.caret} aria-hidden="true" />
-            )}
-            {reader.phase === 'resolved' && rest.length > 0 ? (
-              <span style={{ color: 'var(--ink-soft)' }}>{rest.join(' ')}</span>
-            ) : null}
-          </p>
-        </div>
-
-        <div style={{ ...S.status, color: statusColor }}>
-          {statusText}
-          {reader.phase === 'reading' ? (
-            <span style={S.progress}>
-              word {reader.revealed}/{reader.words.length}
-              {reader.powerIndex !== null &&
-              reader.revealed <= reader.powerIndex + 1
-                ? ' · in power'
-                : ''}
-            </span>
-          ) : null}
-        </div>
-
-        {reader.result ? (
-          <div
-            style={{
-              ...S.result,
-              borderColor:
-                reader.result.points > 0 ? 'var(--good)' : 'var(--bad)',
-            }}
-          >
-            <strong
-              style={{
-                color: reader.result.points > 0 ? 'var(--good)' : 'var(--bad)',
-              }}
-            >
-              {reader.result.judgement.directive === 'accept'
-                ? reader.result.powered
-                  ? 'CORRECT — POWER'
-                  : 'CORRECT'
-                : 'INCORRECT'}{' '}
-              {reader.result.points > 0 ? '+' : ''}
-              {reader.result.points}
-            </strong>
-            <div style={S.answerLine}>{current?.answerSanitized}</div>
+    <>
+      <header className="topbar">
+        <h1 className="topbar__title">{title}</h1>
+        {onExit ? (
+          <div className="topbar__right">
+            <Button variant="ghost" small onClick={onExit}>
+              Done
+            </Button>
           </div>
         ) : null}
-
-        <div style={S.controls}>
-          <button
-            onClick={buzz}
-            disabled={reader.phase !== 'reading'}
-            style={{
-              ...S.buzz,
-              opacity: reader.phase === 'reading' ? 1 : 0.35,
-            }}
-          >
-            BUZZ <span style={S.key}>space</span>
-          </button>
-
-          <input
-            ref={inputRef}
-            value={given}
-            onChange={(e) => setGiven(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && canAnswer) {
-                submit(given);
-                setGiven('');
-              }
-            }}
-            placeholder={canAnswer ? 'your answer, then Enter' : '—'}
-            disabled={!canAnswer}
-            style={{ ...S.input, opacity: canAnswer ? 1 : 0.35 }}
-          />
-
-          <button
-            onClick={() => void loadNext()}
-            style={S.next}
-            disabled={loading}
-          >
-            Next →
-          </button>
-        </div>
-
-        {isEphemeral() ? (
-          <p style={S.warn}>
-            Storage unavailable, so this session's stats are in memory only.
-          </p>
-        ) : null}
-      </main>
-    </div>
+      </header>
+      <div className="app__body">{children}</div>
+    </>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+/** Placeholder for a screen another card is still building. */
+function Pending({
+  title,
+  file,
+  onExit,
+}: {
+  title: string;
+  file: string;
+  onExit(): void;
+}) {
   return (
-    <span style={S.stat}>
-      <span style={S.statLabel}>{label}</span>
-      <span style={S.statValue}>{value}</span>
-    </span>
+    <Screen title={title} onExit={onExit}>
+      <Sheet title="Not wired up yet">
+        <p className="tiny muted">
+          This mode is being built in <code>{file}</code>. The entry point is
+          here and ready for it, so nothing in the shell has to change when it
+          lands.
+        </p>
+        <Button small onClick={onExit}>
+          Back to practice
+        </Button>
+      </Sheet>
+    </Screen>
   );
 }
-
-function pct(n: number): string {
-  return `${Math.round(n * 100)}%`;
-}
-
-const S: Record<string, CSSProperties> = {
-  app: {
-    minHeight: '100dvh',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  header: {
-    borderBottom: '1px solid var(--line)',
-    padding: '10px 16px',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 10,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  brand: {
-    fontSize: 13,
-    letterSpacing: 0.4,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
-  coreTag: {
-    fontSize: 10,
-    color: 'var(--ink-soft)',
-    border: '1px solid var(--line)',
-    borderRadius: 3,
-    padding: '1px 5px',
-  },
-  statRow: { display: 'flex', gap: 14, flexWrap: 'wrap' },
-  stat: { display: 'flex', flexDirection: 'column', lineHeight: 1.2 },
-  statLabel: { fontSize: 9, color: 'var(--ink-soft)', letterSpacing: 0.6 },
-  statValue: { fontSize: 14, fontVariantNumeric: 'tabular-nums' },
-  main: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 760,
-    margin: '0 auto',
-    padding: 16,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  meta: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 10,
-    flexWrap: 'wrap',
-    fontSize: 11,
-    color: 'var(--ink-soft)',
-  },
-  card: {
-    background: 'var(--panel)',
-    border: '1px solid var(--line)',
-    borderRadius: 8,
-    padding: '18px 20px',
-    minHeight: 190,
-  },
-  question: {
-    margin: 0,
-    fontFamily: 'var(--font-read)',
-    fontSize: 18,
-    lineHeight: 1.62,
-  },
-  caret: {
-    display: 'inline-block',
-    width: 8,
-    height: 17,
-    background: 'var(--accent)',
-    verticalAlign: '-2px',
-  },
-  status: {
-    fontSize: 11,
-    letterSpacing: 0.5,
-    display: 'flex',
-    justifyContent: 'space-between',
-    minHeight: 16,
-  },
-  progress: { color: 'var(--ink-soft)', fontVariantNumeric: 'tabular-nums' },
-  result: {
-    border: '1px solid',
-    borderRadius: 6,
-    padding: '10px 12px',
-    background: 'var(--panel-2)',
-    fontSize: 13,
-  },
-  answerLine: { marginTop: 4, color: 'var(--ink-soft)', fontSize: 12 },
-  controls: { display: 'flex', gap: 8, flexWrap: 'wrap' },
-  buzz: {
-    background: 'var(--bad)',
-    color: '#fff',
-    border: 0,
-    borderRadius: 6,
-    padding: '14px 20px',
-    fontWeight: 700,
-    letterSpacing: 0.6,
-    minHeight: 48,
-  },
-  key: { fontSize: 10, fontWeight: 400, opacity: 0.85, marginLeft: 6 },
-  input: {
-    flex: 1,
-    minWidth: 180,
-    background: 'var(--panel-2)',
-    border: '1px solid var(--line)',
-    borderRadius: 6,
-    color: 'var(--ink)',
-    padding: '0 12px',
-    minHeight: 48,
-  },
-  next: {
-    background: 'transparent',
-    color: 'var(--ink)',
-    border: '1px solid var(--line)',
-    borderRadius: 6,
-    padding: '0 16px',
-    minHeight: 48,
-  },
-  warn: { fontSize: 11, color: 'var(--gold)', margin: 0 },
-  nav: {
-    display: 'flex',
-    gap: 4,
-    padding: '8px 16px 0',
-    borderBottom: '1px solid var(--line)',
-  },
-  navBtn: {
-    background: 'transparent',
-    border: 0,
-    borderBottom: '2px solid transparent',
-    color: 'var(--ink-soft)',
-    padding: '6px 10px',
-    fontSize: 12,
-  },
-  navOn: {
-    color: 'var(--ink)',
-    borderBottomColor: 'var(--accent)',
-  },
-};
