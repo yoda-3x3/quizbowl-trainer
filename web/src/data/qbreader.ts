@@ -214,15 +214,36 @@ export async function fetchFrequencyList(
 ): Promise<FrequencyEntry[]> {
   const p = new URLSearchParams({ subcategory, limit: String(limit) });
   const data = (await getJson(`/frequency-list?${p.toString()}`)) as unknown;
-  if (!Array.isArray(data)) return [];
-  return data
+
+  // The endpoint wraps its rows: {"frequencyList":[{answer, answer_normalized,
+  // count}, ...]}. An earlier version of this function expected a bare array
+  // and so silently returned nothing for every subcategory, which made the
+  // Learn tab's lessons chapter permanently empty. Accept both shapes.
+  const rows = unwrapFrequencyRows(data);
+
+  return rows
     .map((row) => {
-      const r = row as { answer?: string; _id?: string; count?: number };
-      const answer = r.answer ?? r._id;
+      const r = row as {
+        answer?: string;
+        answer_normalized?: string;
+        _id?: string;
+        count?: number;
+      };
+      const answer = r.answer ?? r.answer_normalized ?? r._id;
       return answer ? { answer, count: r.count ?? 0 } : null;
     })
     .filter((e): e is FrequencyEntry => e !== null)
     .slice(0, limit);
+}
+
+/** Accepts either a bare array or the `{frequencyList: [...]}` envelope. */
+export function unwrapFrequencyRows(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    const wrapped = (data as { frequencyList?: unknown }).frequencyList;
+    if (Array.isArray(wrapped)) return wrapped;
+  }
+  return [];
 }
 
 // ---------------------------------------------------------------------------
