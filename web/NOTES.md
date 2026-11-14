@@ -150,3 +150,24 @@ that is the natural next step and belongs to whoever owns the bank.
     (Card A owns that) and there is no jsdom in the project, so it is covered
     by a server-render smoke test only: no typing, no clocks, no buzzes
     exercised through the DOM.
+
+## Card F (Learn tab chapters)
+
+12. **`fetchFrequencyList()` in the owned `src/data/qbreader.ts` returns nothing
+    against the live API.** Measured from the running app on 2026-11-14:
+    `GET https://www.qbreader.org/api/frequency-list?subcategory=American%20Literature&limit=5`
+    returns HTTP 200 with `{"frequencyList":[{"answer_normalized":"emily
+    dickinson","count":169,"answer":"Emily Dickinson"}, ...]}`. The helper does
+    `if (!Array.isArray(data)) return []`, so the wrapper object always falls
+    through to the empty list and the Lessons chapter renders its written
+    "no frequency list came back" state instead of cards. A subcategory the
+    bank has no data for (for example `Painting`) answers HTTP 404 with
+    `{"frequencyList":[]}`, which `getJson` throws on, so both outcomes are
+    handled in the chapter. Unwrapping `data.frequencyList` would fix it, but
+    `src/data/qbreader.ts` is owned and was not touched. The Lessons chapter
+    was verified against a browser-side fetch stub that unwraps that field.
+13. **Chapter 2 (`src/learn/chapters/Misses.tsx`) is not on disk.** `Learn.tsx`
+    carries a clearly marked `MissesPlaceholder` in its slot, with the exact
+    import line to restore in a comment above it. The placeholder uses the
+    owned `missedQuestions()` for its counts and its empty state only; it does
+    not attempt the replay interaction.

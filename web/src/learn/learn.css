@@ -1,0 +1,556 @@
+/* ===========================================================================
+   Card F: the Learn tab.
+
+   A scroll-driven study surface, not a marketing page. Four chapters, hard
+   cut between them, each with its own device family:
+
+     1 weak spots  counting numbers, then held still
+     2 misses      owned by another card (the signature interaction)
+     3 lessons     lateral pan driven by vertical scroll
+     4 progress    clip-path wipe between then and now
+
+   Nothing here redefines a token from theme.css. Local knobs are scoped to
+   `.learn` so they cannot leak into the rest of the app.
+   =========================================================================== */
+
+.learn {
+  --chapter-pad: 18px;
+  --rule: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* --- chapter frame -------------------------------------------------------
+   Hard cuts: a rule plus an alternating surface, no fade and no overlap. */
+
+.chapter {
+  position: relative;
+  padding: var(--chapter-pad) 0 calc(var(--chapter-pad) + 6px);
+  border-top: var(--rule);
+  min-width: 0;
+}
+
+.chapter:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+
+.chapter--inset {
+  background: var(--panel);
+  border-radius: var(--radius);
+  border: var(--rule);
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.chapter__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chapter__label {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.chapter__status {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapter__body {
+  margin-top: 12px;
+  min-width: 0;
+}
+
+/* A written close. Chapter 1 holds on this line; nothing moves after it. */
+.chapter__close {
+  margin: 14px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.chapter__close--resolved {
+  color: var(--ink);
+  border-left: 2px solid var(--accent);
+  padding-left: 9px;
+}
+
+/* --- written empty states ------------------------------------------------
+   Deliberately prose, never a zeroed chart. */
+
+.empty {
+  border: var(--rule);
+  border-left: 2px solid var(--ink-soft);
+  border-radius: 6px;
+  background: var(--panel-2);
+  padding: 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.empty__line {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.empty__hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.empty--act {
+  border-left-color: var(--accent);
+}
+
+/* --- chapter 1: weak spots ----------------------------------------------- */
+
+.weak {
+  display: flex;
+  flex-direction: column;
+}
+
+.weak__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name acc'
+    'meta acc'
+    'rail rail';
+  column-gap: 12px;
+  row-gap: 3px;
+  padding: 11px 0;
+  border-top: var(--rule);
+  align-items: baseline;
+}
+
+.weak__row:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+
+.weak__name {
+  grid-area: name;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.weak__meta {
+  grid-area: meta;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.weak__acc {
+  grid-area: acc;
+  justify-self: end;
+  align-self: center;
+  font-size: 25px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+
+.weak__acc--low {
+  color: var(--bad);
+}
+
+.weak__acc--mid {
+  color: var(--gold);
+}
+
+.weak__acc--ok {
+  color: var(--good);
+}
+
+.weak__trend--up {
+  color: var(--good);
+}
+
+.weak__trend--down {
+  color: var(--bad);
+}
+
+/* Where in the question these buzzes land. A static rail with a marker: the
+   chapter ends held, so nothing in here animates after the count. */
+.weak__rail {
+  grid-area: rail;
+  position: relative;
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+/* A full-width slider whose only painted part is the bar pinned to its left
+   edge. Translating a percentage then means a percentage OF THE RAIL, and no
+   geometry property is ever animated. */
+.weak__rail-slide {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.weak__rail-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+}
+
+.weak__rail-slide--ghost .weak__rail-bar {
+  width: 1px;
+  background: var(--ink-soft);
+  opacity: 0.5;
+}
+
+/* --- chapter 2: the owned signature move, placeholder for now ------------ */
+
+.misses-placeholder {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.misses-placeholder__tag {
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* --- chapter 3: lessons, lateral pan -------------------------------------
+   The outer section is tall; the stage sticks while the track slides sideways.
+   Clipping lives on the stage, never on the tall section, because an
+   overflow box on the section would make the sticky stage stop sticking. */
+
+.lessons {
+  position: relative;
+}
+
+.lessons--panning {
+  /* Tall enough for a full lateral pass, short enough not to feel like a
+     hostage situation on a phone. */
+  height: 230vh;
+}
+
+.lessons__stage {
+  position: sticky;
+  top: 8px;
+  padding: 2px 0 4px;
+}
+
+/* The clipped window the track slides behind. Clipping lives here rather than
+   on the sticky stage so the label and the readout stay with the cards. */
+.lessons__viewport {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.lessons--panning .lessons__stage {
+  top: 54px;
+}
+
+.lessons__track {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  width: max-content;
+  will-change: transform;
+}
+
+.lessons__card {
+  width: min(78vw, 290px);
+  flex: 0 0 auto;
+  background: var(--panel);
+  border: var(--rule);
+  border-radius: var(--radius);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lessons__card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lessons__card-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.lessons__card-sub {
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.lessons__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.lessons__item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.lessons__item:first-child {
+  border-top: 0;
+}
+
+.lessons__answer {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-read);
+  font-size: 12.5px;
+}
+
+.lessons__count {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+/* Position in the pan, as a readout rather than a dot row. */
+.lessons__pos {
+  margin-top: 9px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion, and the fallback when there is nothing to pan: the same
+   composition as a row you can swipe yourself. */
+.lessons--static .lessons__stage {
+  position: static;
+}
+
+.lessons--static .lessons__viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lessons--static .lessons__card {
+  scroll-snap-align: start;
+}
+
+.lessons--static .lessons__track {
+  transform: none !important;
+}
+
+/* --- chapter 4: progress, wipe ------------------------------------------- */
+
+.prog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prog__chart {
+  position: relative;
+  border: var(--rule);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 10px 10px 6px;
+}
+
+.prog__layer {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: end;
+  gap: 4px;
+  height: 118px;
+}
+
+.prog__layer--now {
+  position: absolute;
+  inset: 10px 10px 6px;
+  /* The wipe. clip-path only; no width or left is ever animated. */
+  will-change: clip-path;
+}
+
+.prog__bar {
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+
+.prog__bar--then {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.prog__bar--now {
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.prog__scale {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 9.5px;
+  letter-spacing: 0.3px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.prog__legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.prog__swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.prog__swatch--then {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+.prog__swatch--now {
+  background: var(--accent);
+}
+
+.prog__weeks {
+  display: flex;
+  flex-direction: column;
+}
+
+.prog__week {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 44px;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: var(--rule);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.prog__week:first-child {
+  border-top: 0;
+}
+
+.prog__week-date {
+  color: var(--ink-soft);
+  letter-spacing: 0.3px;
+}
+
+.prog__week-rail {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.prog__week-slide {
+  position: absolute;
+  inset: 0;
+}
+
+.prog__week-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--gold);
+}
+
+.prog__week-acc {
+  text-align: right;
+}
+
+@media (max-width: 460px) {
+  .lessons--panning {
+    height: 200vh;
+  }
+
+  .weak__acc {
+    font-size: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep every composition, drop the movement. The page still reads as a
+     static document: counts land on their true values, the pan becomes a
+     swipeable row, the wipe is simply open. */
+  .lessons--panning {
+    height: auto;
+  }
+
+  .lessons__stage {
+    position: static;
+  }
+
+  .lessons__viewport {
+    overflow-x: auto;
+  }
+
+  .lessons__track {
+    transform: none !important;
+  }
+
+  .prog__layer--now {
+    clip-path: none !important;
+  }
+}
