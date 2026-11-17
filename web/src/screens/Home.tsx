@@ -22,7 +22,7 @@ import { DIFFICULTY_LABELS, type AttemptEvent } from '../types';
  * Every practice destination. The bottom bar stays at four tabs, so the extra
  * modes live here: at 390px a five or six item bar stops being thumb-sized.
  */
-export type PracticeMode = 'tossup' | 'bonus' | 'ear' | 'import' | 'oac';
+export type PracticeMode = 'tossup' | 'bonus' | 'ear' | 'vision' | 'import' | 'oac';
 
 interface ModeCard {
   mode: PracticeMode;
@@ -45,6 +45,11 @@ const MODES: readonly ModeCard[] = [
     mode: 'ear',
     title: 'Ear training',
     body: 'Name the work from a clip. The weakest category in most high school fine arts.',
+  },
+  {
+    mode: 'vision',
+    title: 'Vision trainer',
+    body: 'Name the painting as its details appear one at a time. Only what a clue describes is shown.',
   },
   {
     mode: 'oac',

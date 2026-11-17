@@ -1,0 +1,116 @@
+/* Progressive artwork reveal. Uses theme.css tokens; defines nothing at :root. */
+
+.reveal {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reveal__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  background: var(--panel);
+}
+
+.reveal__ground {
+  fill: var(--panel-2);
+}
+
+/* Each patch eases in on its own. Transform and opacity only. */
+.reveal__patch {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.82);
+  animation: reveal-bloom 560ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes reveal-bloom {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* In a live tossup the question text is the primary thing: the canvas is a
+   companion to it, not the screen. Capped so both stay visible on a phone. */
+.reveal--live .reveal__svg {
+  max-height: 34vh;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.reveal__caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 18px;
+}
+
+.reveal__latest {
+  color: var(--accent);
+}
+
+.reveal__title {
+  font-family: var(--font-read);
+  font-size: 14px;
+}
+
+.reveal__count {
+  color: var(--ink-soft);
+  font-size: 11px;
+  flex: none;
+}
+
+/* --- study mode ----------------------------------------------------------- */
+
+.study__clue {
+  font-family: var(--font-read);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.study__left {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.study__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.study__item {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.study__item--shown {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal__patch {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}

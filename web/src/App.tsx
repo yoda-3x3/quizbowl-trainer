@@ -25,6 +25,7 @@ import SettingsScreen from './screens/Settings';
 import Rooms from './screens/Rooms';
 import Learn from './screens/Learn';
 import OacMatch from './screens/OacMatch';
+import StudyMode from './art/StudyMode';
 import { Button, TabBar, type TabItem } from './ui';
 import GetTheApp from './GetTheApp';
 import { isNativeOrInstalled } from './platform';
@@ -106,6 +107,12 @@ function Practice({
       return (
         <Screen title="Ear training" onExit={onExit}>
           <EarTraining />
+        </Screen>
+      );
+    case 'vision':
+      return (
+        <Screen title="Vision trainer" onExit={onExit}>
+          <StudyMode />
         </Screen>
       );
     case 'oac':

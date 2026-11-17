@@ -20,6 +20,7 @@ import { all, append, isEphemeral } from '../engine/log';
 import { summary } from '../learn/derive';
 import { TossupQueue } from '../data/qbreader';
 import { cacheTossups, cachedTossups, pickUnseen } from '../data/cache';
+import LiveArtPanel from '../art/LiveArtPanel';
 import {
   Button,
   PillRow,
@@ -258,6 +259,15 @@ export default function Tossup({ onExit }: TossupProps) {
             <span className="read__caret" aria-hidden="true" />
           )}
         </p>
+
+        {/* Vision trainer. Renders only when the question is about a work in
+            the curated set, which is a small minority of questions. */}
+        <LiveArtPanel
+          tossup={current}
+          words={reader.words}
+          revealed={reader.revealed}
+          resolved={reader.phase === 'resolved'}
+        />
 
         <div
           className={[
