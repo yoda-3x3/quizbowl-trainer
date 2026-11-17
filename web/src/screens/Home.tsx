@@ -141,9 +141,14 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
   return (
     <>
       <header className="topbar">
-        <h1 className="topbar__title">
-          quizbowl <span className="muted">trainer</span>
-        </h1>
+        <div>
+          <h1 className="topbar__title">
+            quizbowl <span className="muted">trainer</span>
+          </h1>
+          <p className="tiny muted" style={{ margin: '2px 0 0' }}>
+            first we quiz, then we bowl
+          </p>
+        </div>
         <div className="topbar__right">
           <StatPill label="wpm" value={String(settings.wpm)} />
           <StatPill label="clock" value={`${settings.postBuzzSeconds}s`} />
