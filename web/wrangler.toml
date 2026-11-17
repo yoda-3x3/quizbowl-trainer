@@ -11,6 +11,15 @@ class_name = "Room"
 tag = "v1"
 new_classes = ["Room"]
 
+# D1 database for username/password accounts. Local dev creates the database
+# the first time `wrangler dev` runs with the --local flag; migrations under
+# workers/room/migrations/ apply with `wrangler d1 migrations apply qb-trainer-auth --local`.
+[[d1_databases]]
+binding = "DB"
+database_name = "qb-trainer-auth"
+database_id = "local"
+migrations_dir = "workers/room/migrations"
+
 # Local dev:   npx wrangler dev
 # Deploy:      npx wrangler deploy
 #
