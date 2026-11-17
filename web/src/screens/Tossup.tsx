@@ -34,12 +34,25 @@ import {
 } from '../ui';
 import type { AttemptEvent, Tossup as TossupQuestion } from '../types';
 
+export interface TossupProtestPayload {
+  questionId: string;
+  givenAnswer: string;
+  reason: string;
+}
+
 export interface TossupProps {
   /** Back to the practice home. */
   onExit(): void;
+  /**
+   * When set, a "Protest" button appears under the answer card after a tossup
+   * resolves. It is called with the question id, the player's last answer, and
+   * their written reason. Omit the prop in solo practice; its absence is what
+   * keeps the button out of non-tournament contexts.
+   */
+  onProtest?(payload: TossupProtestPayload): void | Promise<void>;
 }
 
-export default function Tossup({ onExit }: TossupProps) {
+export default function Tossup({ onExit, onProtest }: TossupProps) {
   const [settings] = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<TossupQueue | null>(null);
@@ -57,6 +70,13 @@ export default function Tossup({ onExit }: TossupProps) {
   // a mysterious blank card.
   const [hideQuestion, setHideQuestion] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Protest sheet is opt-in via the `onProtest` prop: solo practice never sees
+  // it because the prop stays undefined.
+  const [protestOpen, setProtestOpen] = useState(false);
+  const [protestReason, setProtestReason] = useState('');
+  const [protestError, setProtestError] = useState<string | null>(null);
+  const [protestFiling, setProtestFiling] = useState(false);
+  const [protestFiled, setProtestFiled] = useState(false);
 
   const filters = useMemo(() => filtersFrom(settings), [settings]);
 
@@ -121,6 +141,10 @@ export default function Tossup({ onExit }: TossupProps) {
     setCurrent(next);
     setHideQuestion(false);
     setCopied(false);
+    setProtestOpen(false);
+    setProtestReason('');
+    setProtestError(null);
+    setProtestFiled(false);
     reset(next);
     start();
     busyRef.current = false;
@@ -381,6 +405,88 @@ export default function Tossup({ onExit }: TossupProps) {
             </strong>
             <p className="answerline">{current?.answerSanitized}</p>
           </div>
+        ) : null}
+
+        {onProtest && result && current ? (
+          protestFiled ? (
+            <p className="tiny muted" role="status">
+              Protest filed. The match continues.
+            </p>
+          ) : (
+            <Button
+              variant="ghost"
+              small
+              onClick={() => {
+                setProtestOpen(true);
+                setProtestError(null);
+              }}
+            >
+              Protest this ruling
+            </Button>
+          )
+        ) : null}
+
+        {onProtest && protestOpen && current ? (
+          <Sheet
+            title="File a protest"
+            aside={
+              <Button
+                variant="ghost"
+                small
+                onClick={() => {
+                  setProtestOpen(false);
+                  setProtestError(null);
+                }}
+                disabled={protestFiling}
+              >
+                Cancel
+              </Button>
+            }
+          >
+            <p className="tiny muted">
+              Explain why the ruling should be reviewed. The admin sees the
+              reason and your answer, and decides.
+            </p>
+            <TextInput
+              value={protestReason}
+              onChange={(e) => setProtestReason(e.target.value)}
+              placeholder="at least 10 characters"
+              maxLength={1000}
+              autoFocus
+              aria-label="Protest reason"
+              disabled={protestFiling}
+            />
+            {protestError ? (
+              <p className="banner banner--warn">{protestError}</p>
+            ) : null}
+            <Button
+              variant="primary"
+              block
+              disabled={protestReason.trim().length < 10 || protestFiling}
+              onClick={async () => {
+                setProtestFiling(true);
+                setProtestError(null);
+                try {
+                  await onProtest({
+                    questionId: current.id,
+                    givenAnswer: given,
+                    reason: protestReason.trim(),
+                  });
+                  setProtestFiled(true);
+                  setProtestOpen(false);
+                  setProtestReason('');
+                } catch (err) {
+                  setProtestError(
+                    err instanceof Error ? err.message : 'failed to file',
+                  );
+                } finally {
+                  setProtestFiling(false);
+                }
+              }}
+            >
+              {protestFiling ? 'Filing…' : 'File protest'}
+            </Button>
+          </Sheet>
         ) : null}
 
         <div className="controls">

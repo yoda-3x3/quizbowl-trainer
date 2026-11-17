@@ -1,15 +1,16 @@
 /**
- * App shell: four tabs at the bottom, one screen at a time.
+ * App shell: five tabs at the bottom, one screen at a time.
  *
- * No router. The app is a single-screen-at-a-time PWA with four destinations
+ * No router. The app is a single-screen-at-a-time PWA with five destinations
  * and no deep links to honour yet, so a router would add a dependency and a
  * history model for nothing. Practice keeps its own sub-view, so leaving the
  * tab and coming back lands where you were.
  *
- * The bottom bar stays at Practice / Learn / Rooms / Settings. Ear training,
- * OAC match and packet import are practice modes rather than tabs: a six item
- * bar stops being thumb-sized at 390px, and each of them is still one tap from
- * the Practice home.
+ * The bottom bar is Practice / Learn / Rooms / Tournaments / Settings.
+ * Tournaments earns its own top-level tab because hosting, joining and the
+ * protest flow all live under it; see NOTES.md for the deviation from the
+ * earlier four-tab brief. Ear training, OAC match and packet import stay as
+ * practice modes rather than tabs so the bar remains thumb-sized at 390px.
  *
  * Learn renders the scroll-driven study surface. Rooms renders the real
  * multiplayer screen, which already works against the Durable Object.
@@ -26,16 +27,18 @@ import Rooms from './screens/Rooms';
 import Learn from './screens/Learn';
 import OacMatch from './screens/OacMatch';
 import StudyMode from './art/StudyMode';
+import Tournaments from './screens/Tournaments';
 import { Button, Sheet, TabBar, type TabItem } from './ui';
 import { useShortcuts } from './shortcuts';
 
-type TabId = 'practice' | 'learn' | 'rooms' | 'settings';
+type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'settings';
 type PracticeView = 'home' | PracticeMode;
 
 const TABS: readonly TabItem<TabId>[] = [
   { id: 'practice', label: 'Practice', glyph: '▶' },
   { id: 'learn', label: 'Learn', glyph: '◈' },
   { id: 'rooms', label: 'Rooms', glyph: '▦' },
+  { id: 'tournaments', label: 'Tourneys', glyph: '♛' },
   { id: 'settings', label: 'Settings', glyph: '⚙' },
 ];
 
@@ -55,7 +58,8 @@ export default function App() {
       '1': () => setTab('practice'),
       '2': () => setTab('learn'),
       '3': () => setTab('rooms'),
-      '4': () => setTab('settings'),
+      '4': () => setTab('tournaments'),
+      '5': () => setTab('settings'),
       '?': () => setShowHelp((v) => !v),
       Escape: () => {
         if (showHelp) {
@@ -87,6 +91,8 @@ export default function App() {
           <Rooms />
         </Screen>
       ) : null}
+
+      {tab === 'tournaments' ? <Tournaments /> : null}
 
       {tab === 'settings' ? <SettingsScreen /> : null}
 
@@ -130,7 +136,7 @@ function ShortcutsHelp({ onClose }: { onClose(): void }) {
             </Button>
           }
         >
-          <ShortcutRow keys={['1', '2', '3', '4']} label="Switch tabs (Practice, Learn, Rooms, Settings)" />
+          <ShortcutRow keys={['1', '2', '3', '4', '5']} label="Switch tabs (Practice, Learn, Rooms, Tourneys, Settings)" />
           <ShortcutRow keys={['T']} label="Tossups" />
           <ShortcutRow keys={['B']} label="Bonuses" />
           <ShortcutRow keys={['E']} label="Ear training" />

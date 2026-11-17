@@ -171,3 +171,27 @@ that is the natural next step and belongs to whoever owns the bank.
     import line to restore in a comment above it. The placeholder uses the
     owned `missedQuestions()` for its counts and its empty state only; it does
     not attempt the replay interaction.
+
+## Tournaments tab (Task 2 of the auth/tournaments flow)
+
+14. **The bottom bar grew from four tabs to five.** The earlier card said the
+    bar stays at Practice / Learn / Rooms / Settings, but the tournaments brief
+    asked for Tournaments as a top-level destination and explicitly overruled
+    the four-tab constraint. The new order is Practice / Learn / Rooms /
+    Tourneys / Settings (label truncated so the row still fits at 390px). The
+    `?` help card and the number shortcuts (1-5 now) were updated in lockstep.
+15. **The persisted question sequence does not drive the Tossup reader.** The
+    worker stores the pinned `tournament_questions(seq, question_id)` rows at
+    `/start`, but the running-state view embeds the existing Tossup as-is,
+    which pulls questions from the live `TossupQueue` under the player's own
+    filters. The pinned ids exist so a protest refers to a concrete question,
+    not a guess, but every player can still see a different sequence. A proper
+    sequencer that fetches each pinned id in order and feeds it to the reader
+    is called out here as the next unit of work; it was deferred so Tossup did
+    not need a disruptive refactor for this task.
+16. **The `tossups_bonuses` format picks tossup ids for the bonus slots.**
+    `pickQuestionIds` in `TournamentDetail.tsx` only talks to `TossupQueue`, so
+    the slots after `n_tossups` are flagged `question_kind: 'bonus'` but hold a
+    tossup id. A real bonus picker belongs with the client, and the server
+    endpoint already accepts the kind field, so this is a one-screen fix when
+    the bonus flow is designed.
