@@ -112,13 +112,13 @@ interface Bucket {
 const buckets = new Map<string, Bucket>();
 
 /** True if the request should be allowed; false if it should 429. */
-export function rateLimit(key: string, now: number): boolean {
+export function rateLimit(key: string, now: number, max: number = RATE_LIMIT_MAX): boolean {
   const b = buckets.get(key);
   if (!b || b.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return true;
   }
-  if (b.count >= RATE_LIMIT_MAX) return false;
+  if (b.count >= max) return false;
   b.count += 1;
   return true;
 }
@@ -287,6 +287,21 @@ export async function authenticate(
   if (!user) return null;
   if (user.bannedAt != null) return null;
   return { user: toPublicUser(user), token };
+}
+
+/**
+ * Same as `authenticate` but returns just the public user (or null). A thin
+ * convenience over `authenticate()` for routes that need the signed-in user but
+ * do not need the cookie token itself; other modules (tournaments.ts) use this
+ * so session resolution lives in exactly one place.
+ */
+export async function requireUser(
+  request: Request,
+  store: AuthStore,
+  now: number,
+): Promise<PublicUser | null> {
+  const auth = await authenticate(request, store, now);
+  return auth ? auth.user : null;
 }
 
 // ---------------------------------------------------------------------------

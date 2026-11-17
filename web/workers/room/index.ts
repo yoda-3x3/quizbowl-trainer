@@ -2,13 +2,20 @@
  * Worker entry for multiplayer rooms. OWNED FILE.
  *
  * Routes:
- *   POST /api/room                 -> { code }   create a room
- *   GET  /api/room/:code/ws        -> websocket upgrade
- *   GET  /api/room/:code/state     -> snapshot, for debugging
- *   POST /api/auth/signup          -> create an account + session cookie
- *   POST /api/auth/signin          -> session cookie for an existing account
- *   POST /api/auth/signout         -> delete the session + clear the cookie
- *   GET  /api/auth/me              -> the signed-in user, or 401
+ *   POST /api/room                       -> { code }   create a room
+ *   GET  /api/room/:code/ws              -> websocket upgrade
+ *   GET  /api/room/:code/state           -> snapshot, for debugging
+ *   POST /api/auth/signup                -> create an account + session cookie
+ *   POST /api/auth/signin                -> session cookie for an existing account
+ *   POST /api/auth/signout               -> delete the session + clear the cookie
+ *   GET  /api/auth/me                    -> the signed-in user, or 401
+ *   GET  /api/tournaments                -> non-finished tournaments with counts
+ *   POST /api/tournaments                -> create a tournament (signed-in only)
+ *   GET  /api/tournaments/:id            -> tournament + players + questions
+ *   POST /api/tournaments/:id/join       -> join as a player (signed-in only)
+ *   POST /api/tournaments/:id/start      -> creator sets the question sequence
+ *   POST /api/tournaments/:id/protest    -> file a protest on a resolved question
+ *   GET  /api/tournaments/:id/protests   -> caller's protests (admin: all)
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -17,6 +24,7 @@
 import { Room, type Env as RoomEnv } from './room';
 import { makeRoomCode } from './protocol';
 import { d1Store, handleAuth, type RequestContext } from './auth';
+import { d1TournamentStore, handleTournaments } from './tournaments';
 
 export { Room };
 
@@ -62,6 +70,19 @@ export default {
     // Auth endpoints. Same-origin because Pages proxies /api to this Worker.
     if (url.pathname.startsWith('/api/auth/')) {
       const response = await handleAuth(request, d1Store(env.DB), contextFrom(request));
+      if (response) return response;
+    }
+
+    // Tournament endpoints. Reuses the auth store for session resolution.
+    if (url.pathname.startsWith('/api/tournaments')) {
+      const authStore = d1Store(env.DB);
+      const tStore = d1TournamentStore(env.DB);
+      const response = await handleTournaments(
+        request,
+        authStore,
+        tStore,
+        contextFrom(request),
+      );
       if (response) return response;
     }
 
