@@ -19,7 +19,7 @@ import { useState, type ReactNode } from 'react';
 import Home, { type PracticeMode } from './screens/Home';
 import Tossup from './screens/Tossup';
 import Bonus from './screens/Bonus';
-import EarTraining from './screens/EarTraining';
+import EarHub from './ear/EarHub';
 import PacketImport from './screens/Import';
 import SettingsScreen from './screens/Settings';
 import Rooms from './screens/Rooms';
@@ -106,7 +106,7 @@ function Practice({
     case 'ear':
       return (
         <Screen title="Ear training" onExit={onExit}>
-          <EarTraining />
+          <EarHub />
         </Screen>
       );
     case 'vision':
