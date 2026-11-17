@@ -195,3 +195,42 @@ that is the natural next step and belongs to whoever owns the bank.
     tossup id. A real bonus picker belongs with the client, and the server
     endpoint already accepts the kind field, so this is a one-screen fix when
     the bonus flow is designed.
+
+## Admin dashboard (Task 3 of the auth/tournaments flow)
+
+17. **Live room listing and close are not implemented server-side.** Cloudflare
+    Durable Objects expose no enumeration primitive and `workers/room/room.ts`
+    is an owned file that the admin task was not allowed to extend with a
+    `close` hook. As a result `GET /api/admin/rooms` returns
+    `{ rooms: [], note: 'live listing not implemented' }` and
+    `POST /api/admin/rooms/:code/close` returns 501 with an explanatory error.
+    The next unit of work for live rooms would either (a) have the DO register
+    itself in a KV index on first join and deregister on idle teardown, so the
+    admin can list by scanning that index, or (b) add a `close` method on the
+    DO that broadcasts a `{kind:'closed',reason:'closed by admin'}` message and
+    `blockConcurrencyWhile` drains the socket set before throwing. Either is a
+    room-engine change and belongs to whoever owns `room.ts`.
+
+18. **Packets are not persisted server-side.** The importer in `src/import/`
+    parses in the browser and hands results to the host's local queue (see the
+    Card C notes above). Nothing crosses the wire today, so
+    `GET /api/admin/packets` returns the empty list with a `note` explaining
+    the state and `POST /api/admin/packets/:id/remove` returns 404 for the same
+    reason. If packet sharing is ever moved server-side, these two endpoints
+    are the hook the admin dashboard will consume.
+
+19. **Accepting a protest does not yet restitute points.** The resolve endpoint
+    writes `state`, `resolved_by`, `resolved_at` and `resolved_note` on the
+    protest row, and that is all it does. Per-player scoring is still
+    client-side (every tournament player reads from their own `AttemptEvent`
+    log), so the worker has nothing to rewrite when a protest is accepted. A
+    later chunk will need to surface the accepted protest on the client,
+    rewrite the relevant `AttemptEvent`, and recompute the running score for
+    that player. The server part of that change is independent from the
+    endpoints shipped in this task.
+
+20. **Admin dashboard is a hidden route, not a tab.** Per the task brief the
+    five-tab bar is unchanged. Admins open the dashboard from a link in the
+    Settings "Account" block or with keyboard shortcut `A`; non-admins never
+    see the link, the shortcut no-ops for them, and the admin keyboard binding
+    is omitted from the `?` help card so it does not advertise a dead key.

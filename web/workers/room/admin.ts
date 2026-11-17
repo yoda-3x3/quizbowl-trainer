@@ -9,8 +9,24 @@
  * production and from a plain in-memory object in tests, matching the pattern
  * in `auth.ts` and `tournaments.ts`.
  *
- * This change adds the user-management endpoints. Rooms, packets and protests
- * land in the next commit.
+ * Room management notes
+ * ---------------------
+ * The Durable Object `Room` is a hidden-code store: Cloudflare provides no
+ * primitive to enumerate live DOs, and `room.ts` is an owned file that we are
+ * not allowed to extend for a close hook in this task. As a result:
+ *
+ *   GET  /api/admin/rooms           -> `{ rooms: [], note: 'live listing not implemented' }`
+ *   POST /api/admin/rooms/:id/close -> 501 with an explanatory error
+ *
+ * Both are documented in web/NOTES.md as open items for a later task.
+ *
+ * Packets note
+ * ------------
+ * Packet import is client-side only today — the importer parses in-browser and
+ * hands results to the host's session (see NOTES.md, "Card C"). Nothing is
+ * persisted server-side, so the admin packet routes are honest stubs: list
+ * returns an empty collection with a note, and remove is a 404 that says the
+ * same thing. See web/NOTES.md for the follow-up.
  */
 
 import {
@@ -20,6 +36,11 @@ import {
   type Role,
   type StoredUser,
 } from './auth';
+import type {
+  ProtestRow,
+  ProtestState,
+  TournamentStore,
+} from './tournaments';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -31,6 +52,22 @@ export interface AdminUserListEntry {
   role: Role;
   created_at: number;
   banned_at: number | null;
+}
+
+export interface AdminProtestView {
+  id: number;
+  tournament_id: number;
+  tournament_name: string;
+  question_id: string;
+  raised_by: number;
+  raised_by_username: string;
+  reason: string;
+  given_answer: string;
+  state: ProtestState;
+  created_at: number;
+  resolved_by: number | null;
+  resolved_at: number | null;
+  resolved_note: string | null;
 }
 
 /**
@@ -54,6 +91,17 @@ export interface AdminStore {
   setUserRole(id: number, role: Role): Promise<void>;
   setUserBanned(id: number, bannedAt: number | null): Promise<void>;
   deleteSessionsForUser(userId: number): Promise<void>;
+
+  /** Pending by default; pass null for all states. */
+  listProtests(state: ProtestState | null): Promise<ProtestRow[]>;
+  findProtest(id: number): Promise<ProtestRow | null>;
+  resolveProtest(
+    id: number,
+    state: ProtestState,
+    resolvedBy: number,
+    resolvedAt: number,
+    note: string | null,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,9 +110,18 @@ export interface AdminStore {
 
 export const USER_LIST_LIMIT_MAX = 50;
 export const USER_LIST_LIMIT_DEFAULT = 25;
+export const PROTEST_NOTE_MAX = 1000;
 
 function isRole(v: unknown): v is Role {
   return v === 'user' || v === 'admin';
+}
+
+function isProtestState(v: unknown): v is ProtestState {
+  return v === 'pending' || v === 'accepted' || v === 'rejected';
+}
+
+function isDecision(v: unknown): v is 'accepted' | 'rejected' {
+  return v === 'accepted' || v === 'rejected';
 }
 
 // ---------------------------------------------------------------------------
@@ -82,8 +139,17 @@ function numOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function strOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  return String(v);
+}
+
 function roleOf(v: unknown): Role {
   return v === 'admin' ? 'admin' : 'user';
+}
+
+function protestStateOf(v: unknown): ProtestState {
+  return v === 'accepted' || v === 'rejected' ? v : 'pending';
 }
 
 function rowToUser(row: Record<string, unknown>): StoredUser {
@@ -94,6 +160,22 @@ function rowToUser(row: Record<string, unknown>): StoredUser {
     role: roleOf(row.role),
     createdAt: num(row.created_at),
     bannedAt: numOrNull(row.banned_at),
+  };
+}
+
+function rowToProtest(row: Record<string, unknown>): ProtestRow {
+  return {
+    id: num(row.id),
+    tournamentId: num(row.tournament_id),
+    questionId: String(row.question_id ?? ''),
+    raisedBy: num(row.raised_by),
+    reason: String(row.reason ?? ''),
+    givenAnswer: String(row.given_answer ?? ''),
+    state: protestStateOf(row.state),
+    createdAt: num(row.created_at),
+    resolvedBy: numOrNull(row.resolved_by),
+    resolvedAt: numOrNull(row.resolved_at),
+    resolvedNote: strOrNull(row.resolved_note),
   };
 }
 
@@ -143,6 +225,57 @@ export function d1AdminStore(db: D1Database): AdminStore {
       await db
         .prepare('DELETE FROM sessions WHERE user_id = ?')
         .bind(userId)
+        .run();
+    },
+
+    async listProtests(state) {
+      if (state === null) {
+        const res = await db
+          .prepare(
+            `SELECT id, tournament_id, question_id, raised_by, reason,
+                    given_answer, state, created_at, resolved_by, resolved_at,
+                    resolved_note
+               FROM protests
+               ORDER BY created_at DESC`,
+          )
+          .all<Record<string, unknown>>();
+        return (res.results ?? []).map(rowToProtest);
+      }
+      const res = await db
+        .prepare(
+          `SELECT id, tournament_id, question_id, raised_by, reason,
+                  given_answer, state, created_at, resolved_by, resolved_at,
+                  resolved_note
+             FROM protests
+             WHERE state = ?
+             ORDER BY created_at DESC`,
+        )
+        .bind(state)
+        .all<Record<string, unknown>>();
+      return (res.results ?? []).map(rowToProtest);
+    },
+
+    async findProtest(id) {
+      const row = await db
+        .prepare(
+          `SELECT id, tournament_id, question_id, raised_by, reason,
+                  given_answer, state, created_at, resolved_by, resolved_at,
+                  resolved_note
+             FROM protests WHERE id = ?`,
+        )
+        .bind(id)
+        .first<Record<string, unknown>>();
+      return row ? rowToProtest(row) : null;
+    },
+
+    async resolveProtest(id, state, resolvedBy, resolvedAt, note) {
+      await db
+        .prepare(
+          `UPDATE protests
+             SET state = ?, resolved_by = ?, resolved_at = ?, resolved_note = ?
+             WHERE id = ?`,
+        )
+        .bind(state, resolvedBy, resolvedAt, note, id)
         .run();
     },
   };
@@ -309,6 +442,174 @@ async function handleUnban(
 }
 
 // ---------------------------------------------------------------------------
+// Rooms (stubs — see file header)
+// ---------------------------------------------------------------------------
+
+async function handleListRooms(
+  request: Request,
+  authStore: AuthStore,
+  ctx: RequestContext,
+): Promise<Response> {
+  const me = await requireAdmin(request, authStore, ctx);
+  if (me instanceof Response) return me;
+  return json({ rooms: [], note: 'live listing not implemented' });
+}
+
+async function handleCloseRoom(
+  request: Request,
+  authStore: AuthStore,
+  ctx: RequestContext,
+): Promise<Response> {
+  const me = await requireAdmin(request, authStore, ctx);
+  if (me instanceof Response) return me;
+  return json(
+    {
+      error:
+        'closing a room from the admin dashboard is not implemented; the Room DO does not expose a close hook',
+    },
+    501,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Packets (stubs — see file header)
+// ---------------------------------------------------------------------------
+
+async function handleListPackets(
+  request: Request,
+  authStore: AuthStore,
+  ctx: RequestContext,
+): Promise<Response> {
+  const me = await requireAdmin(request, authStore, ctx);
+  if (me instanceof Response) return me;
+  return json({
+    packets: [],
+    note: 'packet import is client-side; nothing to manage server-side yet',
+  });
+}
+
+async function handleRemovePacket(
+  request: Request,
+  authStore: AuthStore,
+  ctx: RequestContext,
+): Promise<Response> {
+  const me = await requireAdmin(request, authStore, ctx);
+  if (me instanceof Response) return me;
+  return json(
+    {
+      error:
+        'packets are not persisted server-side; nothing to remove',
+    },
+    404,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Protests
+// ---------------------------------------------------------------------------
+
+async function handleListProtests(
+  request: Request,
+  authStore: AuthStore,
+  admin: AdminStore,
+  tStore: TournamentStore,
+  ctx: RequestContext,
+): Promise<Response> {
+  const me = await requireAdmin(request, authStore, ctx);
+  if (me instanceof Response) return me;
+
+  const url = new URL(request.url);
+  const rawState = url.searchParams.get('state') ?? 'pending';
+  const filter: ProtestState | null =
+    rawState === 'all' ? null : isProtestState(rawState) ? rawState : 'pending';
+
+  const rows = await admin.listProtests(filter);
+  const views: AdminProtestView[] = [];
+  for (const p of rows) {
+    const tournament = await tStore.findTournament(p.tournamentId);
+    const raiser = await authStore.findUserById(p.raisedBy);
+    views.push({
+      id: p.id,
+      tournament_id: p.tournamentId,
+      tournament_name: tournament ? tournament.name : '',
+      question_id: p.questionId,
+      raised_by: p.raisedBy,
+      raised_by_username: raiser ? raiser.username : '',
+      reason: p.reason,
+      given_answer: p.givenAnswer,
+      state: p.state,
+      created_at: p.createdAt,
+      resolved_by: p.resolvedBy,
+      resolved_at: p.resolvedAt,
+      resolved_note: p.resolvedNote,
+    });
+  }
+  return json({ protests: views });
+}
+
+interface ResolveBody {
+  decision?: unknown;
+  note?: unknown;
+}
+
+async function handleResolveProtest(
+  request: Request,
+  authStore: AuthStore,
+  admin: AdminStore,
+  ctx: RequestContext,
+  protestId: number,
+): Promise<Response> {
+  const me = await requireAdmin(request, authStore, ctx);
+  if (me instanceof Response) return me;
+
+  const body = await readBody<ResolveBody>(request);
+  if (!body) return json({ error: 'invalid body' }, 400);
+  if (!isDecision(body.decision)) {
+    return json({ error: 'decision must be "accepted" or "rejected"' }, 400);
+  }
+  const rawNote = typeof body.note === 'string' ? body.note.trim() : '';
+  if (rawNote.length > PROTEST_NOTE_MAX) {
+    return json(
+      { error: `note cannot exceed ${PROTEST_NOTE_MAX} characters` },
+      400,
+    );
+  }
+  const note: string | null = rawNote.length > 0 ? rawNote : null;
+
+  const existing = await admin.findProtest(protestId);
+  if (!existing) return json({ error: 'protest not found' }, 404);
+  if (existing.state !== 'pending') {
+    return json({ error: 'protest has already been resolved' }, 400);
+  }
+
+  await admin.resolveProtest(
+    protestId,
+    body.decision,
+    me.id,
+    ctx.now,
+    note,
+  );
+
+  const fresh = await admin.findProtest(protestId);
+  if (!fresh) return json({ error: 'protest not found' }, 404);
+  return json({
+    protest: {
+      id: fresh.id,
+      tournament_id: fresh.tournamentId,
+      question_id: fresh.questionId,
+      raised_by: fresh.raisedBy,
+      reason: fresh.reason,
+      given_answer: fresh.givenAnswer,
+      state: fresh.state,
+      created_at: fresh.createdAt,
+      resolved_by: fresh.resolvedBy,
+      resolved_at: fresh.resolvedAt,
+      resolved_note: fresh.resolvedNote,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
 
@@ -326,18 +627,36 @@ export async function handleAdmin(
   request: Request,
   authStore: AuthStore,
   admin: AdminStore,
+  tStore: TournamentStore,
   ctx: RequestContext,
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (!path.startsWith('/api/admin')) return null;
 
+  // Collection paths
   if (path === '/api/admin/users') {
     if (request.method !== 'GET')
       return json({ error: 'method not allowed' }, 405);
     return handleListUsers(request, authStore, admin, ctx);
   }
+  if (path === '/api/admin/rooms') {
+    if (request.method !== 'GET')
+      return json({ error: 'method not allowed' }, 405);
+    return handleListRooms(request, authStore, ctx);
+  }
+  if (path === '/api/admin/packets') {
+    if (request.method !== 'GET')
+      return json({ error: 'method not allowed' }, 405);
+    return handleListPackets(request, authStore, ctx);
+  }
+  if (path === '/api/admin/protests') {
+    if (request.method !== 'GET')
+      return json({ error: 'method not allowed' }, 405);
+    return handleListProtests(request, authStore, admin, tStore, ctx);
+  }
 
+  // Per-user actions: /api/admin/users/:id/{role,ban,unban}
   const userAction = /^\/api\/admin\/users\/(\d+)\/(role|ban|unban)$/.exec(path);
   if (userAction) {
     if (request.method !== 'POST')
@@ -351,6 +670,32 @@ export async function handleAdmin(
       return handleBan(request, authStore, admin, ctx, id);
     if (action === 'unban')
       return handleUnban(request, authStore, admin, ctx, id);
+  }
+
+  // Per-room actions: /api/admin/rooms/:code/close
+  const roomAction = /^\/api\/admin\/rooms\/([A-Za-z0-9]+)\/close$/.exec(path);
+  if (roomAction) {
+    if (request.method !== 'POST')
+      return json({ error: 'method not allowed' }, 405);
+    return handleCloseRoom(request, authStore, ctx);
+  }
+
+  // Per-packet actions: /api/admin/packets/:id/remove
+  const packetAction = /^\/api\/admin\/packets\/([^/]+)\/remove$/.exec(path);
+  if (packetAction) {
+    if (request.method !== 'POST')
+      return json({ error: 'method not allowed' }, 405);
+    return handleRemovePacket(request, authStore, ctx);
+  }
+
+  // Per-protest actions: /api/admin/protests/:id/resolve
+  const protestAction = /^\/api\/admin\/protests\/(\d+)\/resolve$/.exec(path);
+  if (protestAction) {
+    if (request.method !== 'POST')
+      return json({ error: 'method not allowed' }, 405);
+    const id = parseId(protestAction[1] ?? '');
+    if (id === null) return json({ error: 'not found' }, 404);
+    return handleResolveProtest(request, authStore, admin, ctx, id);
   }
 
   return json({ error: 'not found' }, 404);

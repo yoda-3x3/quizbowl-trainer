@@ -20,6 +20,12 @@
  *   POST /api/admin/users/:id/role       -> change a user's role (admin-only)
  *   POST /api/admin/users/:id/ban        -> ban + invalidate sessions (admin-only)
  *   POST /api/admin/users/:id/unban      -> clear banned_at (admin-only)
+ *   GET  /api/admin/rooms                -> stub, see workers/room/admin.ts
+ *   POST /api/admin/rooms/:code/close    -> 501 stub, see workers/room/admin.ts
+ *   GET  /api/admin/packets              -> stub, packets are client-only
+ *   POST /api/admin/packets/:id/remove   -> 404 stub, packets are client-only
+ *   GET  /api/admin/protests             -> list protests by state (default pending)
+ *   POST /api/admin/protests/:id/resolve -> set a protest's resolution + note
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -78,14 +84,17 @@ export default {
       if (response) return response;
     }
 
-    // Admin endpoints. Guarded per-route by requireAdmin.
+    // Admin endpoints. Guarded per-route by requireAdmin; mounted ahead of the
+    // tournaments dispatch so /api/admin/protests never falls through.
     if (url.pathname.startsWith('/api/admin')) {
       const authStore = d1Store(env.DB);
+      const tStore = d1TournamentStore(env.DB);
       const adminStore = d1AdminStore(env.DB);
       const response = await handleAdmin(
         request,
         authStore,
         adminStore,
+        tStore,
         contextFrom(request),
       );
       if (response) return response;
