@@ -27,8 +27,6 @@ import Learn from './screens/Learn';
 import OacMatch from './screens/OacMatch';
 import StudyMode from './art/StudyMode';
 import { Button, Sheet, TabBar, type TabItem } from './ui';
-import GetTheApp from './GetTheApp';
-import { isNativeOrInstalled } from './platform';
 import { useShortcuts } from './shortcuts';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'settings';
@@ -47,10 +45,6 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
 
   const toHome = () => setPractice('home');
-
-  // Lite mode: a plain browser tab gets solo practice only. Read once per
-  // mount, since installing or leaving standalone reloads the document anyway.
-  const full = isNativeOrInstalled();
 
   // Global shortcuts. Tossup owns Space (buzz) and Enter (next) in its own
   // phase-aware handler, so those are deliberately absent here; the two never
@@ -80,7 +74,6 @@ export default function App() {
       {tab === 'practice' ? (
         <Practice
           view={practice}
-          full={full}
           onStart={setPractice}
           onExit={toHome}
           onOpenSettings={() => setTab('settings')}
@@ -91,14 +84,7 @@ export default function App() {
 
       {tab === 'rooms' ? (
         <Screen title="Rooms">
-          {full ? (
-            <Rooms />
-          ) : (
-            <GetTheApp
-              feature="Multiplayer rooms are in the installed app."
-              reason="A room holds a live connection open for the whole match, which a browser tab drops the moment it goes to the background."
-            />
-          )}
+          <Rooms />
         </Screen>
       ) : null}
 
@@ -107,6 +93,13 @@ export default function App() {
       {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} /> : null}
 
       <TabBar<TabId> items={TABS} active={tab} onSelect={setTab} />
+      <div
+        className="pre-alpha-badge"
+        aria-label="This build is pre-alpha"
+        title="Early build. Expect missing features and bugs."
+      >
+        pre-alpha
+      </div>
     </div>
   );
 }
@@ -184,14 +177,11 @@ function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
 
 function Practice({
   view,
-  full,
   onStart,
   onExit,
   onOpenSettings,
 }: {
   view: PracticeView;
-  /** False in a plain browser tab: packet import is app-only. */
-  full: boolean;
   onStart(mode: PracticeMode): void;
   onExit(): void;
   onOpenSettings(): void;
@@ -222,14 +212,7 @@ function Practice({
     case 'import':
       return (
         <Screen title="Import a packet" onExit={onExit}>
-          {full ? (
-            <PacketImport />
-          ) : (
-            <GetTheApp
-              feature="Packet import is in the installed app."
-              reason="Importing a set reads a file from your device and keeps the parsed questions on it."
-            />
-          )}
+          <PacketImport />
         </Screen>
       );
     default:

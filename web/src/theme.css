@@ -651,3 +651,23 @@ input {
     width: 100%;
   }
 }
+
+/* Pre-alpha badge — pinned to a top corner so it rides above every screen
+   without taking tab-bar or topbar space. Non-interactive. */
+.pre-alpha-badge {
+  position: fixed;
+  top: 6px;
+  right: 8px;
+  z-index: 50;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent, #f5c242);
+  background: color-mix(in srgb, var(--accent, #f5c242) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #f5c242) 40%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+  user-select: none;
+}
