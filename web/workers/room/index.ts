@@ -16,6 +16,10 @@
  *   POST /api/tournaments/:id/start      -> creator sets the question sequence
  *   POST /api/tournaments/:id/protest    -> file a protest on a resolved question
  *   GET  /api/tournaments/:id/protests   -> caller's protests (admin: all)
+ *   GET  /api/admin/users                -> paginated user list (admin-only)
+ *   POST /api/admin/users/:id/role       -> change a user's role (admin-only)
+ *   POST /api/admin/users/:id/ban        -> ban + invalidate sessions (admin-only)
+ *   POST /api/admin/users/:id/unban      -> clear banned_at (admin-only)
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -25,6 +29,7 @@ import { Room, type Env as RoomEnv } from './room';
 import { makeRoomCode } from './protocol';
 import { d1Store, handleAuth, type RequestContext } from './auth';
 import { d1TournamentStore, handleTournaments } from './tournaments';
+import { d1AdminStore, handleAdmin } from './admin';
 
 export { Room };
 
@@ -70,6 +75,19 @@ export default {
     // Auth endpoints. Same-origin because Pages proxies /api to this Worker.
     if (url.pathname.startsWith('/api/auth/')) {
       const response = await handleAuth(request, d1Store(env.DB), contextFrom(request));
+      if (response) return response;
+    }
+
+    // Admin endpoints. Guarded per-route by requireAdmin.
+    if (url.pathname.startsWith('/api/admin')) {
+      const authStore = d1Store(env.DB);
+      const adminStore = d1AdminStore(env.DB);
+      const response = await handleAdmin(
+        request,
+        authStore,
+        adminStore,
+        contextFrom(request),
+      );
       if (response) return response;
     }
 
