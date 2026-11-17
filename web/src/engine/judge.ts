@@ -36,10 +36,11 @@ import checkAnswer from 'qb-answer-checker';
 import type { Directive, Judgement } from '../types';
 
 /**
- * QB Reader's own default, and the value their API hardcodes.
  * Lower is MORE lenient. 3-9 behave identically; 1 accepts nearly anything.
+ * We default to 2 (just below the plateau) so self-test typos like
+ * "Tchiakovsky" are forgiven — this is a practice app, not a tournament.
  */
-export const DEFAULT_STRICTNESS = 7;
+export const DEFAULT_STRICTNESS = 2;
 
 /** The useful ends of the range, for a settings slider. */
 export const STRICTNESS_RANGE = { lenient: 1, standard: 7, strict: 12 } as const;
