@@ -15,7 +15,7 @@
  * multiplayer screen, which already works against the Durable Object.
  */
 
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Home, { type PracticeMode } from './screens/Home';
 import Tossup from './screens/Tossup';
 import Bonus from './screens/Bonus';
@@ -26,9 +26,10 @@ import Rooms from './screens/Rooms';
 import Learn from './screens/Learn';
 import OacMatch from './screens/OacMatch';
 import StudyMode from './art/StudyMode';
-import { Button, TabBar, type TabItem } from './ui';
+import { Button, Sheet, TabBar, type TabItem } from './ui';
 import GetTheApp from './GetTheApp';
 import { isNativeOrInstalled } from './platform';
+import { useShortcuts } from './shortcuts';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -43,12 +44,36 @@ const TABS: readonly TabItem<TabId>[] = [
 export default function App() {
   const [tab, setTab] = useState<TabId>('practice');
   const [practice, setPractice] = useState<PracticeView>('home');
+  const [showHelp, setShowHelp] = useState(false);
 
   const toHome = () => setPractice('home');
 
   // Lite mode: a plain browser tab gets solo practice only. Read once per
   // mount, since installing or leaving standalone reloads the document anyway.
   const full = isNativeOrInstalled();
+
+  // Global shortcuts. Tossup owns Space (buzz) and Enter (next) in its own
+  // phase-aware handler, so those are deliberately absent here; the two never
+  // see the same keypress because Tossup prevents the default before it
+  // bubbles.
+  const shortcuts = useMemo(
+    () => ({
+      '1': () => setTab('practice'),
+      '2': () => setTab('learn'),
+      '3': () => setTab('rooms'),
+      '4': () => setTab('settings'),
+      '?': () => setShowHelp((v) => !v),
+      Escape: () => {
+        if (showHelp) {
+          setShowHelp(false);
+          return;
+        }
+        if (tab === 'practice' && practice !== 'home') toHome();
+      },
+    }),
+    [practice, showHelp, tab],
+  );
+  useShortcuts(shortcuts);
 
   return (
     <div className="app">
@@ -79,8 +104,81 @@ export default function App() {
 
       {tab === 'settings' ? <SettingsScreen /> : null}
 
+      {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} /> : null}
+
       <TabBar<TabId> items={TABS} active={tab} onSelect={setTab} />
     </div>
+  );
+}
+
+function ShortcutsHelp({ onClose }: { onClose(): void }) {
+  return (
+    <div
+      className="modal__scrim"
+      onClick={onClose}
+      role="presentation"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.6)',
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '100%' }}>
+        <Sheet
+          title="Keyboard shortcuts"
+          aside={
+            <Button variant="ghost" small onClick={onClose}>
+              Close
+            </Button>
+          }
+        >
+          <ShortcutRow keys={['1', '2', '3', '4']} label="Switch tabs (Practice, Learn, Rooms, Settings)" />
+          <ShortcutRow keys={['T']} label="Tossups" />
+          <ShortcutRow keys={['B']} label="Bonuses" />
+          <ShortcutRow keys={['E']} label="Ear training" />
+          <ShortcutRow keys={['V']} label="Vision trainer" />
+          <ShortcutRow keys={['O']} label="OAC match" />
+          <ShortcutRow keys={['I']} label="Import a packet" />
+          <ShortcutRow keys={['Space']} label="Buzz (while reading)" />
+          <ShortcutRow keys={['Enter']} label="Submit answer, or next question" />
+          <ShortcutRow keys={['Shift', 'Enter']} label="I don't know (give up, see the answer)" />
+          <ShortcutRow keys={['K']} label="Hide or show the current question (for reading aloud)" />
+          <ShortcutRow keys={['Y']} label="Copy the current question's ID to the clipboard" />
+          <ShortcutRow keys={['Esc']} label="Back to Practice home" />
+          <ShortcutRow keys={['?']} label="Show or hide this card" />
+        </Sheet>
+      </div>
+    </div>
+  );
+}
+
+function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
+  return (
+    <p className="tiny" style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+      <span style={{ display: 'inline-flex', gap: 4, minWidth: 90 }}>
+        {keys.map((k) => (
+          <kbd
+            key={k}
+            style={{
+              fontFamily: 'ui-monospace, monospace',
+              fontSize: 11,
+              padding: '1px 6px',
+              border: '1px solid var(--line, #333)',
+              borderRadius: 4,
+              background: 'var(--surface-2, #1a1d22)',
+            }}
+          >
+            {k}
+          </kbd>
+        ))}
+      </span>
+      <span>{label}</span>
+    </p>
   );
 }
 
