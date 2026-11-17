@@ -37,12 +37,19 @@ import {
   subcategoriesFor,
   useSettings,
 } from '../ui';
+import { useAuth } from '../auth';
+import SignIn from './SignIn';
+import SignUp from './SignUp';
+
+type AuthView = 'none' | 'signin' | 'signup';
 
 export default function Settings() {
   const [settings, set] = useSettings();
   const [counts, setCounts] = useState<CacheCounts | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [authView, setAuthView] = useState<AuthView>('none');
+  const auth = useAuth();
 
   useEffect(() => {
     void cacheCounts().then(setCounts);
@@ -92,6 +99,59 @@ export default function Settings() {
             this session only.
           </p>
         ) : null}
+
+        {authView === 'signin' ? (
+          <SignIn
+            onDone={() => setAuthView('none')}
+            onCancel={() => setAuthView('none')}
+            onSwitchToSignUp={() => setAuthView('signup')}
+          />
+        ) : authView === 'signup' ? (
+          <SignUp
+            onDone={() => setAuthView('none')}
+            onCancel={() => setAuthView('none')}
+            onSwitchToSignIn={() => setAuthView('signin')}
+          />
+        ) : (
+          <Sheet title="Account">
+            {auth.loading ? (
+              <p className="tiny muted">Checking account.</p>
+            ) : auth.user ? (
+              <>
+                <p className="tiny">
+                  Signed in as <strong>{auth.user.username}</strong>
+                  {auth.user.role === 'admin' ? ' (admin)' : ''}.
+                </p>
+                <div className="row">
+                  <Button
+                    small
+                    variant="ghost"
+                    onClick={() => {
+                      void auth.signOut();
+                    }}
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="tiny muted">
+                  An account is optional. Signing in lets you use the same
+                  profile across devices.
+                </p>
+                <div className="row">
+                  <Button small onClick={() => setAuthView('signin')}>
+                    Sign in
+                  </Button>
+                  <Button small variant="ghost" onClick={() => setAuthView('signup')}>
+                    Sign up
+                  </Button>
+                </div>
+              </>
+            )}
+          </Sheet>
+        )}
 
         <Sheet title="Reading">
           <SliderField
