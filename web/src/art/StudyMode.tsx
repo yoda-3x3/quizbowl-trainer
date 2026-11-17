@@ -61,9 +61,11 @@ export default function StudyMode() {
     [artwork.title],
   );
 
-  const submit = useCallback(() => {
+  const submit = useCallback((giveUp = false) => {
     if (phase === 'answered') return;
-    const verdict = judge(answerLine, given);
+    const verdict = giveUp
+      ? { directive: 'reject' as const }
+      : judge(answerLine, given);
     const ok = verdict.directive === 'accept';
     setCorrect(ok);
     setPhase('answered');
@@ -80,7 +82,7 @@ export default function StudyMode() {
       buzzWordIndex: shown - 1,
       totalWords: order.length,
       powerWordIndex: null,
-      givenAnswer: given,
+      givenAnswer: giveUp ? '' : given,
       directive: verdict.directive,
       points: ok ? 10 : 0,
       msToAnswer: null,
@@ -143,11 +145,19 @@ export default function StudyMode() {
               placeholder="name the work, then Enter"
               onChange={(e) => setGiven(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') submit();
+                if (e.key === 'Enter' && e.shiftKey) {
+                  e.preventDefault();
+                  submit(true);
+                  return;
+                }
+                if (e.key === 'Enter') submit(false);
               }}
             />
-            <Button variant="primary" onClick={submit} disabled={given.trim() === ''}>
+            <Button variant="primary" onClick={() => submit(false)} disabled={given.trim() === ''}>
               Answer
+            </Button>
+            <Button variant="ghost" onClick={() => submit(true)}>
+              I don't know
             </Button>
           </div>
 

@@ -52,6 +52,11 @@ export default function Tossup({ onExit }: TossupProps) {
   const [loading, setLoading] = useState(true);
   const [fromCache, setFromCache] = useState(false);
   const [dry, setDry] = useState(false);
+  // QB Reader's `k` shortcut: hide the read question so you can replay it on
+  // a friend. Reset on every new question so a hidden one is not replaced by
+  // a mysterious blank card.
+  const [hideQuestion, setHideQuestion] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const filters = useMemo(() => filtersFrom(settings), [settings]);
 
@@ -114,6 +119,8 @@ export default function Tossup({ onExit }: TossupProps) {
     if (next.source === 'qbreader') void cacheTossups([next]);
 
     setCurrent(next);
+    setHideQuestion(false);
+    setCopied(false);
     reset(next);
     start();
     busyRef.current = false;
@@ -143,6 +150,8 @@ export default function Tossup({ onExit }: TossupProps) {
 
   // Space buzzes, but never while a text field has focus: in the buzzed state
   // the field is focused and a space there must type a space.
+  //
+  // `k` and `y` mirror QB Reader (show/hide last question, copy question id).
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const target = ev.target as HTMLElement | null;
@@ -150,20 +159,52 @@ export default function Tossup({ onExit }: TossupProps) {
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
         target?.isContentEditable === true;
+      if (typing || ev.ctrlKey || ev.metaKey || ev.altKey) {
+        // Still allow Space -> buzz from the body even if an obscure focus
+        // target slips through, but every other binding stays off while
+        // typing or when a native shortcut is being used.
+        if (
+          ev.code === 'Space' &&
+          !typing &&
+          reader.phase === 'reading'
+        ) {
+          ev.preventDefault();
+          buzz();
+        }
+        return;
+      }
 
-      if (ev.code === 'Space' && !typing && reader.phase === 'reading') {
+      if (ev.code === 'Space' && reader.phase === 'reading') {
         ev.preventDefault();
         buzz();
         return;
       }
-      if (ev.key === 'Enter' && !typing && reader.phase === 'resolved') {
+      if (ev.key === 'Enter' && reader.phase === 'resolved') {
         ev.preventDefault();
         void loadNext();
+        return;
+      }
+      if ((ev.key === 'k' || ev.key === 'K') && current) {
+        ev.preventDefault();
+        setHideQuestion((v) => !v);
+        return;
+      }
+      if ((ev.key === 'y' || ev.key === 'Y') && current) {
+        ev.preventDefault();
+        void navigator.clipboard
+          ?.writeText(current.id)
+          .then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => {
+            /* clipboard refused; nothing to tell the user */
+          });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [buzz, loadNext, reader.phase]);
+  }, [buzz, current, loadNext, reader.phase]);
 
   const onSubmit = useCallback(
     (ev: FormEvent) => {
@@ -174,6 +215,11 @@ export default function Tossup({ onExit }: TossupProps) {
     },
     [canAnswer, given, submit],
   );
+
+  const giveUp = useCallback(() => {
+    if (!canAnswer) return;
+    submit('');
+  }, [canAnswer, submit]);
 
   const stats = useMemo(() => summary(events), [events]);
 
@@ -239,27 +285,38 @@ export default function Tossup({ onExit }: TossupProps) {
           </span>
         </div>
 
-        <p className="read read--card">
-          {shown.map((word, i) => (
-            <span
-              key={i}
-              className={
-                reader.powerIndex !== null && i === reader.powerIndex
-                  ? 'read__power'
-                  : undefined
-              }
-            >
-              {word}{' '}
-            </span>
-          ))}
-          {reader.phase === 'resolved' ? (
-            rest.length > 0 ? (
-              <span className="read__rest">{rest.join(' ')}</span>
-            ) : null
-          ) : (
-            <span className="read__caret" aria-hidden="true" />
-          )}
-        </p>
+        {hideQuestion ? (
+          <p className="read read--card muted">
+            <em>Question hidden. Press K to show it again.</em>
+          </p>
+        ) : (
+          <p className="read read--card">
+            {shown.map((word, i) => (
+              <span
+                key={i}
+                className={
+                  reader.powerIndex !== null && i === reader.powerIndex
+                    ? 'read__power'
+                    : undefined
+                }
+              >
+                {word}{' '}
+              </span>
+            ))}
+            {reader.phase === 'resolved' ? (
+              rest.length > 0 ? (
+                <span className="read__rest">{rest.join(' ')}</span>
+              ) : null
+            ) : (
+              <span className="read__caret" aria-hidden="true" />
+            )}
+          </p>
+        )}
+        {copied ? (
+          <p className="tiny muted" role="status">
+            Question ID copied.
+          </p>
+        ) : null}
 
         {/* Vision trainer. Renders only when the question is about a work in
             the curated set, which is a small minority of questions. */}
@@ -352,6 +409,12 @@ export default function Tossup({ onExit }: TossupProps) {
                   ref={inputRef}
                   value={given}
                   onChange={(e) => setGiven(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.shiftKey) {
+                      e.preventDefault();
+                      giveUp();
+                    }
+                  }}
                   placeholder={
                     canAnswer
                       ? reader.pendingPrompt
@@ -367,6 +430,15 @@ export default function Tossup({ onExit }: TossupProps) {
                 />
                 <Button type="submit" disabled={!canAnswer} small={false}>
                   Submit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={!canAnswer}
+                  onClick={giveUp}
+                  title="Give up on this question and see the answer"
+                >
+                  I don't know
                 </Button>
               </form>
             </>

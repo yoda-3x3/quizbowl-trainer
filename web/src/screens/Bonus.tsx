@@ -325,6 +325,12 @@ export default function Bonus({ onExit }: BonusProps) {
                           ref={inputRef}
                           value={given}
                           onChange={(e) => setGiven(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.shiftKey) {
+                              e.preventDefault();
+                              skipPart();
+                            }
+                          }}
                           placeholder={
                             prompt
                               ? 'be more specific, then Enter'
@@ -338,7 +344,7 @@ export default function Bonus({ onExit }: BonusProps) {
                         <Button type="submit">Submit</Button>
                       </form>
                       <Button variant="ghost" small onClick={skipPart}>
-                        I do not know
+                        I don't know
                       </Button>
                     </>
                   )}

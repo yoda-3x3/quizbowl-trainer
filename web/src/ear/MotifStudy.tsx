@@ -65,9 +65,11 @@ export default function MotifStudy() {
 
   const atEnd = shown >= order.length;
 
-  const submit = useCallback(() => {
+  const submit = useCallback((giveUp = false) => {
     if (answered) return;
-    const verdict = judge(answerlineFor(work), given);
+    const verdict = giveUp
+      ? { directive: 'reject' as const }
+      : judge(answerlineFor(work), given);
     const ok = verdict.directive === 'accept';
     setCorrect(ok);
     setAnswered(true);
@@ -84,7 +86,7 @@ export default function MotifStudy() {
       buzzWordIndex: shown - 1,
       totalWords: order.length,
       powerWordIndex: null,
-      givenAnswer: given,
+      givenAnswer: giveUp ? '' : given,
       directive: verdict.directive,
       points: ok ? 10 : 0,
       msToAnswer: null,
@@ -160,15 +162,23 @@ export default function MotifStudy() {
               placeholder="name the piece, then Enter"
               onChange={(e) => setGiven(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') submit();
+                if (e.key === 'Enter' && e.shiftKey) {
+                  e.preventDefault();
+                  submit(true);
+                  return;
+                }
+                if (e.key === 'Enter') submit(false);
               }}
             />
             <Button
               variant="primary"
-              onClick={submit}
+              onClick={() => submit(false)}
               disabled={given.trim() === ''}
             >
               Answer
+            </Button>
+            <Button variant="ghost" onClick={() => submit(true)}>
+              I don't know
             </Button>
           </div>
 

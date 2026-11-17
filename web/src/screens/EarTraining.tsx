@@ -152,13 +152,17 @@ export default function EarTraining() {
     });
   }, [items, queue.length]);
 
-  const submit = useCallback(() => {
+  const submit = useCallback((giveUp = false) => {
     if (!item || verdict) return;
-    const directive = judgeWork(item.work, answer);
+    const directive: Directive = giveUp
+      ? 'reject'
+      : judgeWork(item.work, answer);
     const correct = directive === 'accept';
-    const notesVerdict = notesMatch(notes, item.part.notes, {
-      transpose: anyKey,
-    });
+    const notesVerdict = giveUp
+      ? null
+      : notesMatch(notes, item.part.notes, {
+          transpose: anyKey,
+        });
 
     setVerdict({ directive, correct, notes: notesVerdict });
     setSeen((n) => n + 1);
@@ -291,6 +295,11 @@ export default function EarTraining() {
               placeholder="either one counts"
               onChange={(e) => setAnswer(e.target.value)}
               onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.shiftKey) {
+                  e.preventDefault();
+                  submit(true);
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   notesRef.current?.focus();
@@ -312,9 +321,14 @@ export default function EarTraining() {
               placeholder="e.g. G G G Eb"
               onChange={(e) => setNotes(e.target.value)}
               onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.shiftKey) {
+                  e.preventDefault();
+                  submit(true);
+                  return;
+                }
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  submit();
+                  submit(false);
                 }
               }}
             />
@@ -336,8 +350,17 @@ export default function EarTraining() {
             </span>
           </label>
 
-          <button className="btn btn--primary btn--block" onClick={submit}>
+          <button
+            className="btn btn--primary btn--block"
+            onClick={() => submit(false)}
+          >
             Submit
+          </button>
+          <button
+            className="btn btn--ghost btn--block"
+            onClick={() => submit(true)}
+          >
+            I don't know
           </button>
         </div>
       )}
