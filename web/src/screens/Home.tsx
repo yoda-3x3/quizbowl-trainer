@@ -17,6 +17,9 @@ import {
   useSettings,
 } from '../ui';
 import { DIFFICULTY_LABELS, type AttemptEvent } from '../types';
+import { useInstallState } from '../install';
+import InstallButton from '../InstallButton';
+import { useShortcuts } from '../shortcuts';
 
 /**
  * Every practice destination. The bottom bar stays at four tabs, so the extra
@@ -69,9 +72,48 @@ export interface HomeProps {
   onOpenSettings(): void;
 }
 
+const INSTALL_DISMISSED_KEY = 'qbt.installPromptDismissed.v1';
+
+function wasInstallPromptDismissed(): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    return localStorage.getItem(INSTALL_DISMISSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markInstallPromptDismissed(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+  } catch {
+    /* localStorage can throw in private mode; dismissal is best-effort */
+  }
+}
+
 export default function Home({ onStart, onOpenSettings }: HomeProps) {
   const [settings] = useSettings();
   const [events, setEvents] = useState<AttemptEvent[]>([]);
+  const { canInstall, isIOS } = useInstallState();
+  const [dismissed, setDismissed] = useState(wasInstallPromptDismissed);
+  const showInstall = (canInstall || isIOS) && !dismissed;
+
+  // Launch any mode by its first letter. Only active while this component is
+  // mounted, which is exactly when the mode grid is on screen.
+  useShortcuts(
+    useMemo(
+      () => ({
+        t: () => onStart('tossup'),
+        b: () => onStart('bonus'),
+        e: () => onStart('ear'),
+        v: () => onStart('vision'),
+        o: () => onStart('oac'),
+        i: () => onStart('import'),
+      }),
+      [onStart],
+    ),
+  );
 
   useEffect(() => {
     void all().then(setEvents);
@@ -109,6 +151,30 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
       </header>
 
       <div className="app__body">
+        {showInstall ? (
+          <Sheet
+            title="Install the app"
+            aside={
+              <Button
+                variant="ghost"
+                small
+                onClick={() => {
+                  markInstallPromptDismissed();
+                  setDismissed(true);
+                }}
+              >
+                Dismiss
+              </Button>
+            }
+          >
+            <p className="tiny">
+              Add Quizbowl Trainer to your home screen for offline practice,
+              multiplayer rooms and packet import.
+            </p>
+            <InstallButton />
+          </Sheet>
+        ) : null}
+
         <div className="mode-grid">
           {MODES.map((m) => (
             <button
