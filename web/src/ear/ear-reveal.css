@@ -1,0 +1,119 @@
+/* Ear trainer reveal surface. Uses theme.css tokens; defines nothing at :root. */
+
+.earrev {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  background: var(--panel);
+  padding: 12px;
+  min-width: 0;
+}
+
+/* The clip as a timeline, with described stretches lit and the rest dark.
+   Same idea as the painting: you can see how much is still missing. */
+.earrev__bar {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.earrev__seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  opacity: 0.45;
+  transition: opacity 180ms ease;
+}
+
+.earrev__seg--on {
+  opacity: 1;
+}
+
+.earrev__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.earrev__meta {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.earrev__caption {
+  margin: 0;
+  font-size: 12px;
+  min-height: 18px;
+}
+
+.earrev__latest {
+  color: var(--accent);
+}
+
+.earrev__empty {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+/* --- staff ---------------------------------------------------------------- */
+
+.staff {
+  width: 100%;
+  height: auto;
+  max-height: 120px;
+  display: block;
+}
+
+.staff__line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.staff__clef {
+  fill: var(--ink-soft);
+  font-size: 44px;
+  dominant-baseline: alphabetic;
+}
+
+.staff__head {
+  fill: var(--ink);
+}
+
+.staff__stem {
+  stroke: var(--ink);
+  stroke-width: 1.4;
+}
+
+.staff__accidental {
+  fill: var(--ink-soft);
+  font-size: 15px;
+}
+
+.staff__note--new {
+  opacity: 0;
+  animation: staff-in 320ms ease forwards;
+}
+
+@keyframes staff-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff__note--new {
+    opacity: 1;
+    animation: none;
+  }
+  .earrev__seg {
+    transition: none;
+  }
+}

@@ -21,6 +21,7 @@ import { summary } from '../learn/derive';
 import { TossupQueue } from '../data/qbreader';
 import { cacheTossups, cachedTossups, pickUnseen } from '../data/cache';
 import LiveArtPanel from '../art/LiveArtPanel';
+import LiveEarPanel from '../ear/LiveEarPanel';
 import {
   Button,
   PillRow,
@@ -263,6 +264,15 @@ export default function Tossup({ onExit }: TossupProps) {
         {/* Vision trainer. Renders only when the question is about a work in
             the curated set, which is a small minority of questions. */}
         <LiveArtPanel
+          tossup={current}
+          words={reader.words}
+          revealed={reader.revealed}
+          resolved={reader.phase === 'resolved'}
+        />
+
+        {/* Ear trainer. Same contract: silent unless the question is about a
+            piece we have motifs for. */}
+        <LiveEarPanel
           tossup={current}
           words={reader.words}
           revealed={reader.revealed}
