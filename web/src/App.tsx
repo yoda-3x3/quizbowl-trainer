@@ -28,8 +28,10 @@ import Learn from './screens/Learn';
 import OacMatch from './screens/OacMatch';
 import StudyMode from './art/StudyMode';
 import Tournaments from './screens/Tournaments';
+import Admin from './screens/Admin';
 import { Button, Sheet, TabBar, type TabItem } from './ui';
 import { useShortcuts } from './shortcuts';
+import { useAuth } from './auth';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -46,13 +48,17 @@ export default function App() {
   const [tab, setTab] = useState<TabId>('practice');
   const [practice, setPractice] = useState<PracticeView>('home');
   const [showHelp, setShowHelp] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const auth = useAuth();
 
   const toHome = () => setPractice('home');
+  const isAdmin = auth.user?.role === 'admin';
 
   // Global shortcuts. Tossup owns Space (buzz) and Enter (next) in its own
   // phase-aware handler, so those are deliberately absent here; the two never
   // see the same keypress because Tossup prevents the default before it
-  // bubbles.
+  // bubbles. The admin shortcut (`A`) is silently a no-op for non-admins so a
+  // typo on a real keyboard does not reveal a hidden surface.
   const shortcuts = useMemo(
     () => ({
       '1': () => setTab('practice'),
@@ -60,18 +66,34 @@ export default function App() {
       '3': () => setTab('rooms'),
       '4': () => setTab('tournaments'),
       '5': () => setTab('settings'),
+      a: () => {
+        if (isAdmin) setShowAdmin(true);
+      },
       '?': () => setShowHelp((v) => !v),
       Escape: () => {
         if (showHelp) {
           setShowHelp(false);
           return;
         }
+        if (showAdmin) {
+          setShowAdmin(false);
+          return;
+        }
         if (tab === 'practice' && practice !== 'home') toHome();
       },
     }),
-    [practice, showHelp, tab],
+    [practice, showHelp, showAdmin, tab, isAdmin],
   );
   useShortcuts(shortcuts);
+
+  if (showAdmin) {
+    return (
+      <div className="app">
+        <Admin onExit={() => setShowAdmin(false)} />
+        {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -94,9 +116,11 @@ export default function App() {
 
       {tab === 'tournaments' ? <Tournaments /> : null}
 
-      {tab === 'settings' ? <SettingsScreen /> : null}
+      {tab === 'settings' ? (
+        <SettingsScreen onOpenAdmin={() => setShowAdmin(true)} />
+      ) : null}
 
-      {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} /> : null}
+      {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
 
       <TabBar<TabId> items={TABS} active={tab} onSelect={setTab} />
       <div
@@ -110,7 +134,13 @@ export default function App() {
   );
 }
 
-function ShortcutsHelp({ onClose }: { onClose(): void }) {
+function ShortcutsHelp({
+  onClose,
+  isAdmin,
+}: {
+  onClose(): void;
+  isAdmin: boolean;
+}) {
   return (
     <div
       className="modal__scrim"
@@ -149,6 +179,9 @@ function ShortcutsHelp({ onClose }: { onClose(): void }) {
           <ShortcutRow keys={['K']} label="Hide or show the current question (for reading aloud)" />
           <ShortcutRow keys={['Y']} label="Copy the current question's ID to the clipboard" />
           <ShortcutRow keys={['Esc']} label="Back to Practice home" />
+          {isAdmin ? (
+            <ShortcutRow keys={['A']} label="Open the admin dashboard" />
+          ) : null}
           <ShortcutRow keys={['?']} label="Show or hide this card" />
         </Sheet>
       </div>

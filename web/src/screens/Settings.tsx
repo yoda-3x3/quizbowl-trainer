@@ -43,7 +43,12 @@ import SignUp from './SignUp';
 
 type AuthView = 'none' | 'signin' | 'signup';
 
-export default function Settings() {
+export interface SettingsProps {
+  /** Opens the admin dashboard. Provided by `App`; omitted in tests. */
+  onOpenAdmin?(): void;
+}
+
+export default function Settings({ onOpenAdmin }: SettingsProps) {
   const [settings, set] = useSettings();
   const [counts, setCounts] = useState<CacheCounts | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -132,6 +137,11 @@ export default function Settings() {
                   >
                     Sign out
                   </Button>
+                  {auth.user.role === 'admin' && onOpenAdmin ? (
+                    <Button small variant="ghost" onClick={onOpenAdmin}>
+                      Admin dashboard
+                    </Button>
+                  ) : null}
                 </div>
               </>
             ) : (
