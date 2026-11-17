@@ -42,6 +42,17 @@ export const SOURCES = {
   the_oxbow:
     'File:Cole Thomas The Oxbow (The Connecticut River near Northampton 1836).jpg',
   venus_of_urbino: 'File:Tiziano - Venere di Urbino - Google Art Project.jpg',
+  school_of_athens:
+    'File:"The School of Athens" by Raffaello Sanzio da Urbino.jpg',
+  arnolfini_portrait: 'File:Van Eyck - Arnolfini Portrait.jpg',
+  las_meninas:
+    'File:Las Meninas, by Diego Velázquez, from Prado in Google Earth.jpg',
+  third_of_may:
+    'File:El Tres de Mayo, by Francisco de Goya, from Prado thin black margin.jpg',
+  great_wave: 'File:Tsunami by hokusai 19th century.jpg',
+  fall_of_icarus: 'File:Pieter Bruegel de Oude - De val van Icarus.jpg',
+  grande_jatte: 'File:A Sunday on La Grande Jatte, Georges Seurat, 1884.jpg',
+  olympia: 'File:Edouard Manet - Olympia - Google Art Project 3.jpg',
 };
 
 const plain = (v) =>

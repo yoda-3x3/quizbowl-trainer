@@ -126,6 +126,70 @@ describe('findMotifWork', () => {
     expect(findMotifWork('The Rite of Spring')).toBeNull();
     expect(findMotifWork('')).toBeNull();
   });
+
+  it('does not let a generic word drag in the wrong piece', () => {
+    // Regression. Adding Vivaldi's Spring with the keyword "spring" made all
+    // of these match it, which is worse than matching nothing.
+    expect(findMotifWork('The Rite of Spring')).toBeNull();
+    expect(findMotifWork('Appalachian Spring')).toBeNull();
+    expect(findMotifWork('Spring Symphony')).toBeNull();
+    expect(findMotifWork('Spring Sonata')).toBeNull();
+    // The specific titles still work.
+    expect(findMotifWork('La primavera')?.id).toBe('spring_mvt1');
+    expect(findMotifWork('The Four Seasons')?.id).toBe('spring_mvt1');
+  });
+
+  it('does not confuse the two Peer Gynt excerpts', () => {
+    // Regression. Both carried "peer gynt", so a Morning Mood question would
+    // have shown the Mountain King's motifs.
+    expect(findMotifWork('Morning Mood')?.id).toBe('peer_gynt_morning');
+    expect(findMotifWork('In the Hall of the Mountain King')?.id).toBe(
+      'peer_gynt_mountainking',
+    );
+    expect(findMotifWork('Peer Gynt')).toBeNull();
+  });
+
+  it('uses no keyword that is ambiguous across the repertoire', () => {
+    // A length rule is the wrong test: "moldau" is six characters and
+    // perfectly specific. What matters is whether the word names more than one
+    // well known piece.
+    const AMBIGUOUS = new Set([
+      'spring',
+      'winter',
+      'summer',
+      'autumn',
+      'peer gynt',
+      'symphony',
+      'sonata',
+      'serenade',
+      'concerto',
+      'nocturne',
+      'prelude',
+      'overture',
+      'suite',
+      'the seasons',
+    ]);
+    for (const w of MOTIF_WORKS) {
+      expect(w.answerKeywords.length).toBeGreaterThan(0);
+      for (const k of w.answerKeywords) {
+        expect(k).toBe(k.toLowerCase());
+        expect(AMBIGUOUS.has(k)).toBe(false);
+      }
+    }
+  });
+
+  it('keeps answer keywords unique across works', () => {
+    const seen = new Map<string, string>();
+    for (const w of MOTIF_WORKS) {
+      for (const k of w.answerKeywords) {
+        const owner = seen.get(k);
+        expect(owner, `"${k}" is claimed by both ${owner} and ${w.id}`).toBe(
+          undefined,
+        );
+        seen.set(k, w.id);
+      }
+    }
+  });
 });
 
 describe('motifRevealsFor', () => {
