@@ -45,10 +45,19 @@ import { TossupQueue, defaultFilters } from '../../src/data/qbreader';
 
 export interface Env {
   ROOM: DurableObjectNamespace;
+  /** D1 database binding for the live-rooms index. Optional so solo-practice
+   * tests that stand up the DO without a D1 binding still work. */
+  DB?: D1Database;
+  /** Shared secret required by `/__internal/close`. Optional for the same
+   * reason; a missing secret simply refuses every internal request. */
+  INTERNAL_SECRET?: string;
 }
 
 const DEFAULT_WPM = 150;
 const MAX_PLAYERS = 12;
+/** How often the DO is allowed to re-touch the live-rooms row on heartbeat.
+ * Lower than the admin list's 2-minute staleness window with plenty of slack. */
+const HEARTBEAT_MS = 20_000;
 
 export class Room implements DurableObject {
   private room: RoomState;
@@ -56,11 +65,18 @@ export class Room implements DurableObject {
   private queue = new TossupQueue(defaultFilters());
   private wpm = DEFAULT_WPM;
   private lastActivity = Date.now();
+  private env: Env;
+  /** True once we've written the create row for this DO lifetime. */
+  private registered = false;
+  private lastHeartbeat = 0;
+  /** Player count last written to D1, so we skip no-op updates. */
+  private lastWrittenPlayerCount = -1;
 
   constructor(
     private readonly ctx: DurableObjectState,
-    _env: Env,
+    env: Env,
   ) {
+    this.env = env;
     this.room = createRoom('????');
     void this.ctx.blockConcurrencyWhile(async () => {
       const saved = await this.ctx.storage.get<RoomState>('room');
@@ -99,11 +115,28 @@ export class Room implements DurableObject {
       const server = pair[1];
       server.accept();
       this.wire(server);
+      // Registering happens here (rather than on the first `join` message) so a
+      // room that accepts a socket but is torn down before anyone names
+      // themselves still has a last_seen that the admin sweep can age out.
+      await this.registerLive(Date.now());
       return new Response(null, { status: 101, webSocket: client });
     }
 
     if (url.pathname.endsWith('/state')) {
       return Response.json(snapshot(this.room, Date.now()));
+    }
+
+    // Internal: the admin worker sets closed_at and then calls this to drain
+    // immediately instead of waiting for the next heartbeat. The secret header
+    // is compared to env.INTERNAL_SECRET and never surfaces in a response.
+    if (url.pathname.endsWith('/__internal/close')) {
+      const presented = request.headers.get('x-internal-secret') ?? '';
+      const expected = this.env.INTERNAL_SECRET ?? '';
+      if (expected.length === 0 || !constantTimeEquals(presented, expected)) {
+        return new Response('forbidden', { status: 403 });
+      }
+      await this.drainAndClose('closed by admin');
+      return Response.json({ ok: true });
     }
 
     return new Response('not found', { status: 404 });
@@ -124,6 +157,10 @@ export class Room implements DurableObject {
 
   private async onMessage(ws: WebSocket, ev: MessageEvent): Promise<void> {
     this.lastActivity = Date.now();
+    // Heartbeat: touch the live-rooms row periodically, and check for an admin
+    // close. Either side of this call can throw; `heartbeat` swallows its own
+    // errors so a D1 outage never breaks a live room.
+    await this.heartbeat(this.lastActivity);
     let msg: ClientMessage;
     try {
       msg = JSON.parse(String(ev.data)) as ClientMessage;
@@ -196,8 +233,13 @@ export class Room implements DurableObject {
     if (!playerId) return;
     // Only mark away if they have no other socket open.
     const stillHere = [...this.sessions.values()].includes(playerId);
-    if (stillHere) return;
+    if (stillHere) {
+      await this.touchLive(Date.now());
+      return;
+    }
     await this.commit(leave(this.room, playerId, Date.now()));
+    // Last socket out: remove the row so the admin list never shows a ghost.
+    if (this.sessions.size === 0) await this.deregisterLive();
   }
 
   // -------------------------------------------------------------------------
@@ -251,6 +293,7 @@ export class Room implements DurableObject {
     // Tear the room down if it has been quiet for a long time.
     if (this.sessions.size === 0 && now - this.lastActivity > IDLE_TEARDOWN_MS) {
       await this.ctx.storage.deleteAll();
+      await this.deregisterLive();
       return;
     }
 
@@ -282,6 +325,9 @@ export class Room implements DurableObject {
     }
 
     await this.ctx.storage.put('room', this.room);
+    // A commit may have changed the connected player count; keep the live row
+    // honest. Safe to await: `touchLive` degrades to a no-op on D1 errors.
+    await this.touchLive(Date.now());
     await this.rearm();
   }
 
@@ -318,4 +364,131 @@ export class Room implements DurableObject {
       this.sessions.delete(ws);
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Live-rooms index (D1-backed) and admin-driven close.
+  //
+  // Writes here must never break a room. Every path catches its own errors so
+  // a D1 outage degrades cleanly to "the admin dashboard won't list this
+  // room" rather than "nobody can play".
+  // -------------------------------------------------------------------------
+
+  private connectedCount(): number {
+    // Count distinct player ids across open sockets. A player reconnecting on
+    // a second tab must not be counted twice.
+    const ids = new Set<string>();
+    for (const id of this.sessions.values()) ids.add(id);
+    return ids.size;
+  }
+
+  private async registerLive(now: number): Promise<void> {
+    if (!this.env.DB) return;
+    if (this.room.code === '????') return;
+    const count = this.connectedCount();
+    try {
+      await this.env.DB.prepare(
+        `INSERT INTO live_rooms (id, created_at, last_seen, player_count)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen,
+                                         player_count = excluded.player_count`,
+      )
+        .bind(this.room.code, now, now, count)
+        .run();
+      this.registered = true;
+      this.lastHeartbeat = now;
+      this.lastWrittenPlayerCount = count;
+    } catch (err) {
+      console.error('live_rooms register failed', err);
+    }
+  }
+
+  /**
+   * Write the row's `last_seen` and (if changed) `player_count`. Also reads
+   * back `closed_at` and triggers a drain if the admin marked this room for
+   * closure since the last heartbeat.
+   */
+  private async touchLive(now: number): Promise<void> {
+    if (!this.env.DB) return;
+    if (this.room.code === '????') return;
+    const count = this.connectedCount();
+    const sameCount = count === this.lastWrittenPlayerCount;
+    const tooSoon = now - this.lastHeartbeat < HEARTBEAT_MS;
+    if (sameCount && tooSoon) return;
+    try {
+      const row = await this.env.DB.prepare(
+        `INSERT INTO live_rooms (id, created_at, last_seen, player_count)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET last_seen = excluded.last_seen,
+                                         player_count = excluded.player_count
+           RETURNING closed_at`,
+      )
+        .bind(this.room.code, now, now, count)
+        .first<{ closed_at: number | null }>();
+      this.registered = true;
+      this.lastHeartbeat = now;
+      this.lastWrittenPlayerCount = count;
+      if (row && row.closed_at !== null) {
+        await this.drainAndClose('closed by admin');
+      }
+    } catch (err) {
+      console.error('live_rooms touch failed', err);
+    }
+  }
+
+  private async heartbeat(now: number): Promise<void> {
+    await this.touchLive(now);
+  }
+
+  private async deregisterLive(): Promise<void> {
+    if (!this.env.DB) return;
+    if (!this.registered && this.room.code === '????') return;
+    try {
+      await this.env.DB.prepare('DELETE FROM live_rooms WHERE id = ?')
+        .bind(this.room.code)
+        .run();
+    } catch (err) {
+      console.error('live_rooms deregister failed', err);
+    }
+    this.registered = false;
+    this.lastWrittenPlayerCount = -1;
+  }
+
+  /**
+   * Broadcast a closed message to every connected client, close every socket,
+   * and clear the row. Idempotent: calling this on a room with no sockets
+   * simply deletes the row.
+   */
+  private async drainAndClose(reason: string): Promise<void> {
+    await this.ctx.blockConcurrencyWhile(async () => {
+      const payload = JSON.stringify({ t: 'closed', reason } as ServerMessage);
+      for (const ws of [...this.sessions.keys()]) {
+        try {
+          ws.send(payload);
+        } catch {
+          // ignored: we're about to close anyway
+        }
+        try {
+          ws.close(1000, 'closed by admin');
+        } catch {
+          // ignored
+        }
+      }
+      this.sessions.clear();
+      await this.deregisterLive();
+    });
+  }
+}
+
+/**
+ * Length-prefixed constant-time string compare. Used so an attacker racing
+ * `/__internal/close` cannot time-measure byte-by-byte to recover
+ * `INTERNAL_SECRET`.
+ */
+function constantTimeEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
 }

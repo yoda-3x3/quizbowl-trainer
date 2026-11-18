@@ -23,8 +23,8 @@
  *   POST /api/admin/users/:id/role       -> change a user's role (admin-only)
  *   POST /api/admin/users/:id/ban        -> ban + invalidate sessions (admin-only)
  *   POST /api/admin/users/:id/unban      -> clear banned_at (admin-only)
- *   GET  /api/admin/rooms                -> stub, see workers/room/admin.ts
- *   POST /api/admin/rooms/:code/close    -> 501 stub, see workers/room/admin.ts
+ *   GET  /api/admin/rooms                -> live-room listing from live_rooms
+ *   POST /api/admin/rooms/:code/close    -> mark closed_at + drain the DO
  *   GET  /api/admin/packets              -> stub, packets are client-only
  *   POST /api/admin/packets/:id/remove   -> 404 stub, packets are client-only
  *   GET  /api/admin/protests             -> list protests by state (default pending)
@@ -38,13 +38,32 @@ import { Room, type Env as RoomEnv } from './room';
 import { makeRoomCode } from './protocol';
 import { d1Store, handleAuth, type RequestContext } from './auth';
 import { d1TournamentStore, handleTournaments } from './tournaments';
-import { d1AdminStore, handleAdmin } from './admin';
+import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
 
 export { Room };
 
 /** The full Worker env: the Durable Object plus the D1 database. */
 export interface Env extends RoomEnv {
   DB: D1Database;
+  /** Shared secret for the Room DO's /__internal/close endpoint. Set with
+   *  `wrangler secret put INTERNAL_SECRET` (see web/NOTES.md). */
+  INTERNAL_SECRET?: string;
+}
+
+/**
+ * Bridges the admin worker to the Room DO. `index.ts` is the only place that
+ * holds the DO namespace and the shared secret; the admin module stays pure.
+ */
+function roomCloserFor(env: Env): RoomCloser {
+  return {
+    async close(id: string): Promise<void> {
+      const stub = env.ROOM.get(env.ROOM.idFromName(id));
+      await stub.fetch('https://do/__internal/close', {
+        method: 'POST',
+        headers: { 'x-internal-secret': env.INTERNAL_SECRET ?? '' },
+      });
+    },
+  };
 }
 
 const CORS = {
@@ -98,6 +117,7 @@ export default {
         authStore,
         adminStore,
         tStore,
+        roomCloserFor(env),
         contextFrom(request),
       );
       if (response) return response;

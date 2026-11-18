@@ -110,6 +110,7 @@ export type ServerMessage =
       resolved: boolean;
     }
   | { t: 'pong'; sent: number; serverNow: number }
+  | { t: 'closed'; reason: string }
   | { t: 'error'; message: string };
 
 /** Serialize a question for the wire, dropping anything that spoils it. */

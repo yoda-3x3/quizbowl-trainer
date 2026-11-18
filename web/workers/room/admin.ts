@@ -11,14 +11,14 @@
  *
  * Room management notes
  * ---------------------
- * The Durable Object `Room` is a hidden-code store: Cloudflare provides no
- * primitive to enumerate live DOs, and `room.ts` is an owned file that we are
- * not allowed to extend for a close hook in this task. As a result:
- *
- *   GET  /api/admin/rooms           -> `{ rooms: [], note: 'live listing not implemented' }`
- *   POST /api/admin/rooms/:id/close -> 501 with an explanatory error
- *
- * Both are documented in web/NOTES.md as open items for a later task.
+ * Cloudflare Durable Objects expose no primitive to enumerate live DOs, so
+ * `room.ts` now maintains a `live_rooms` D1 table (migration 0004). This
+ * module lists from that table (sweeping rows older than the staleness
+ * window so an ungracefully evicted DO never shows up) and marks a row
+ * `closed_at` on close. The caller supplies a `RoomCloser` so the admin
+ * worker can also reach the DO directly through its `/__internal/close`
+ * route and drain the sockets immediately instead of waiting for the next
+ * heartbeat; the shared secret is in `env.INTERNAL_SECRET`.
  *
  * Packets note
  * ------------
@@ -56,6 +56,35 @@ export interface AdminUserListEntry {
   role: Role;
   created_at: number;
   banned_at: number | null;
+}
+
+/** Milliseconds a `live_rooms` row's `last_seen` may lag before the sweep
+ * removes it. Tuned above the DO's heartbeat interval with room to spare. */
+export const LIVE_ROOMS_STALENESS_MS = 2 * 60 * 1000;
+
+export interface AdminLiveRoomView {
+  id: string;
+  created_at: number;
+  last_seen: number;
+  player_count: number;
+}
+
+export interface LiveRoomRow {
+  id: string;
+  createdAt: number;
+  lastSeen: number;
+  playerCount: number;
+  closedAt: number | null;
+}
+
+/**
+ * Fire-and-forget hook the admin close handler uses to reach the live Room DO
+ * directly, bypassing the heartbeat loop. The implementation in `index.ts`
+ * wraps `env.ROOM.get(...).fetch('/__internal/close', ...)` with the shared
+ * secret; the test harness passes a no-op.
+ */
+export interface RoomCloser {
+  close(id: string): Promise<void>;
 }
 
 export interface AdminProtestView {
@@ -102,6 +131,16 @@ export interface AdminStore {
   setUserRole(id: number, role: Role): Promise<void>;
   setUserBanned(id: number, bannedAt: number | null): Promise<void>;
   deleteSessionsForUser(userId: number): Promise<void>;
+
+  /**
+   * Live rooms: sweep rows older than `stalenessMs` first so the listing never
+   * shows a ghost from a DO that was evicted ungracefully, then return the
+   * fresh rows in creation order.
+   */
+  listLiveRooms(now: number, stalenessMs: number): Promise<LiveRoomRow[]>;
+  findLiveRoom(id: string): Promise<LiveRoomRow | null>;
+  /** Marks the row for closure. Returns true if the row existed. */
+  markRoomClosed(id: string, closedAt: number): Promise<boolean>;
 
   /** Pending by default; pass null for all states. */
   listProtests(state: ProtestState | null): Promise<ProtestRow[]>;
@@ -174,6 +213,16 @@ function rowToUser(row: Record<string, unknown>): StoredUser {
   };
 }
 
+function rowToLiveRoom(row: Record<string, unknown>): LiveRoomRow {
+  return {
+    id: String(row.id ?? ''),
+    createdAt: num(row.created_at),
+    lastSeen: num(row.last_seen),
+    playerCount: num(row.player_count),
+    closedAt: numOrNull(row.closed_at),
+  };
+}
+
 function rowToProtest(row: Record<string, unknown>): ProtestRow {
   return {
     id: num(row.id),
@@ -237,6 +286,47 @@ export function d1AdminStore(db: D1Database): AdminStore {
         .prepare('DELETE FROM sessions WHERE user_id = ?')
         .bind(userId)
         .run();
+    },
+
+    async listLiveRooms(now, stalenessMs) {
+      const cutoff = now - stalenessMs;
+      await db
+        .prepare('DELETE FROM live_rooms WHERE last_seen < ?')
+        .bind(cutoff)
+        .run();
+      const res = await db
+        .prepare(
+          `SELECT id, created_at, last_seen, player_count, closed_at
+             FROM live_rooms
+             WHERE closed_at IS NULL
+             ORDER BY created_at ASC`,
+        )
+        .all<Record<string, unknown>>();
+      return (res.results ?? []).map(rowToLiveRoom);
+    },
+
+    async findLiveRoom(id) {
+      const row = await db
+        .prepare(
+          `SELECT id, created_at, last_seen, player_count, closed_at
+             FROM live_rooms WHERE id = ?`,
+        )
+        .bind(id)
+        .first<Record<string, unknown>>();
+      return row ? rowToLiveRoom(row) : null;
+    },
+
+    async markRoomClosed(id, closedAt) {
+      const res = await db
+        .prepare('UPDATE live_rooms SET closed_at = ? WHERE id = ?')
+        .bind(closedAt, id)
+        .run();
+      // `meta.changes` is the row count D1 affected. Fall back to a scan if
+      // the driver omits it (older local wrangler).
+      const changes =
+        (res.meta as { changes?: number } | undefined)?.changes ?? -1;
+      if (changes >= 0) return changes > 0;
+      return (await this.findLiveRoom(id)) !== null;
     },
 
     async listProtests(state) {
@@ -453,33 +543,52 @@ async function handleUnban(
 }
 
 // ---------------------------------------------------------------------------
-// Rooms (stubs — see file header)
+// Rooms (live index — see file header)
 // ---------------------------------------------------------------------------
+
+function toLiveRoomView(r: LiveRoomRow): AdminLiveRoomView {
+  return {
+    id: r.id,
+    created_at: r.createdAt,
+    last_seen: r.lastSeen,
+    player_count: r.playerCount,
+  };
+}
 
 async function handleListRooms(
   request: Request,
   authStore: AuthStore,
+  admin: AdminStore,
   ctx: RequestContext,
 ): Promise<Response> {
   const me = await requireAdmin(request, authStore, ctx);
   if (me instanceof Response) return me;
-  return json({ rooms: [], note: 'live listing not implemented' });
+  const rows = await admin.listLiveRooms(ctx.now, LIVE_ROOMS_STALENESS_MS);
+  return json({ rooms: rows.map(toLiveRoomView) });
 }
 
 async function handleCloseRoom(
   request: Request,
   authStore: AuthStore,
+  admin: AdminStore,
+  rooms: RoomCloser,
   ctx: RequestContext,
+  id: string,
 ): Promise<Response> {
   const me = await requireAdmin(request, authStore, ctx);
   if (me instanceof Response) return me;
-  return json(
-    {
-      error:
-        'closing a room from the admin dashboard is not implemented; the Room DO does not expose a close hook',
-    },
-    501,
-  );
+  const row = await admin.findLiveRoom(id);
+  if (!row) return json({ error: 'room not found' }, 404);
+  await admin.markRoomClosed(id, ctx.now);
+  // The direct close is best-effort: the row's `closed_at` guarantees the DO
+  // drains on its next heartbeat even if this call fails (DO unreachable,
+  // misconfigured secret). We never surface the inner error to the client.
+  try {
+    await rooms.close(id);
+  } catch (err) {
+    console.error('direct room close failed', err);
+  }
+  return json({ ok: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -702,13 +811,42 @@ function parseId(raw: string): number | null {
  * Handles an /api/admin/* request. Returns null for anything that is not an
  * admin path so the caller can fall through to its other routes.
  */
+/** No-op `RoomCloser` used when the caller only needs the admin dispatch
+ * (for example in tests that never exercise the close path). */
+const NOOP_ROOM_CLOSER: RoomCloser = { async close() {} };
+
+/**
+ * Handles an /api/admin/* request. Two overloads: the 5-arg form (no room
+ * closer) is intended for tests that never exercise the close path; the
+ * 6-arg form is what the production worker in `index.ts` uses.
+ */
 export async function handleAdmin(
   request: Request,
   authStore: AuthStore,
   admin: AdminStore,
   tStore: TournamentStore,
   ctx: RequestContext,
+): Promise<Response | null>;
+export async function handleAdmin(
+  request: Request,
+  authStore: AuthStore,
+  admin: AdminStore,
+  tStore: TournamentStore,
+  rooms: RoomCloser,
+  ctx: RequestContext,
+): Promise<Response | null>;
+export async function handleAdmin(
+  request: Request,
+  authStore: AuthStore,
+  admin: AdminStore,
+  tStore: TournamentStore,
+  ctxOrRooms: RequestContext | RoomCloser,
+  maybeCtx?: RequestContext,
 ): Promise<Response | null> {
+  const rooms: RoomCloser =
+    maybeCtx === undefined ? NOOP_ROOM_CLOSER : (ctxOrRooms as RoomCloser);
+  const ctx: RequestContext =
+    maybeCtx === undefined ? (ctxOrRooms as RequestContext) : maybeCtx;
   const url = new URL(request.url);
   const path = url.pathname;
   if (!path.startsWith('/api/admin')) return null;
@@ -722,7 +860,7 @@ export async function handleAdmin(
   if (path === '/api/admin/rooms') {
     if (request.method !== 'GET')
       return json({ error: 'method not allowed' }, 405);
-    return handleListRooms(request, authStore, ctx);
+    return handleListRooms(request, authStore, admin, ctx);
   }
   if (path === '/api/admin/packets') {
     if (request.method !== 'GET')
@@ -756,7 +894,8 @@ export async function handleAdmin(
   if (roomAction) {
     if (request.method !== 'POST')
       return json({ error: 'method not allowed' }, 405);
-    return handleCloseRoom(request, authStore, ctx);
+    const id = (roomAction[1] ?? '').toUpperCase();
+    return handleCloseRoom(request, authStore, admin, rooms, ctx, id);
   }
 
   // Per-packet actions: /api/admin/packets/:id/remove

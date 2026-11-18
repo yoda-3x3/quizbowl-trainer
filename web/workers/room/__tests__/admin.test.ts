@@ -28,7 +28,12 @@ import {
   type TournamentState,
   type TournamentStore,
 } from '../tournaments';
-import { handleAdmin, type AdminStore } from '../admin';
+import {
+  handleAdmin,
+  type AdminStore,
+  type LiveRoomRow,
+  type RoomCloser,
+} from '../admin';
 
 // ---------------------------------------------------------------------------
 // In-memory stores
@@ -209,10 +214,35 @@ class MemoryTournamentStore implements TournamentStore {
 }
 
 class MemoryAdminStore implements AdminStore {
+  public liveRooms = new Map<string, LiveRoomRow>();
+
   constructor(
     private authStore: MemoryAuthStore,
     private tStore: MemoryTournamentStore,
   ) {}
+
+  async listLiveRooms(now: number, stalenessMs: number): Promise<LiveRoomRow[]> {
+    const cutoff = now - stalenessMs;
+    for (const [id, row] of [...this.liveRooms]) {
+      if (row.lastSeen < cutoff) this.liveRooms.delete(id);
+    }
+    return [...this.liveRooms.values()]
+      .filter((r) => r.closedAt === null)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((r) => ({ ...r }));
+  }
+
+  async findLiveRoom(id: string): Promise<LiveRoomRow | null> {
+    const r = this.liveRooms.get(id);
+    return r ? { ...r } : null;
+  }
+
+  async markRoomClosed(id: string, closedAt: number): Promise<boolean> {
+    const r = this.liveRooms.get(id);
+    if (!r) return false;
+    r.closedAt = closedAt;
+    return true;
+  }
 
   async listUsers({ q, offset, limit }: { q: string; offset: number; limit: number }) {
     const needle = q.toLowerCase();
@@ -761,12 +791,30 @@ describe('POST /api/admin/users/:id/unban', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Rooms stubs
+// Rooms: live index + close
 // ---------------------------------------------------------------------------
 
+function seedLiveRoom(
+  admin: MemoryAdminStore,
+  id: string,
+  createdAt: number,
+  lastSeen: number,
+  playerCount: number,
+): void {
+  admin.liveRooms.set(id, {
+    id,
+    createdAt,
+    lastSeen,
+    playerCount,
+    closedAt: null,
+  });
+}
+
 describe('GET /api/admin/rooms', () => {
-  it('returns an empty list with a note', async () => {
+  it('returns the live rooms in creation order without a note', async () => {
     const { authStore, tStore, admin, aliceCookie } = await seed();
+    seedLiveRoom(admin, 'ABCD', NOW - 60_000, NOW - 1000, 3);
+    seedLiveRoom(admin, 'EFGH', NOW - 10_000, NOW - 500, 1);
     const res = await handleAdmin(
       req('GET', '/api/admin/rooms', undefined, aliceCookie),
       authStore,
@@ -776,16 +824,58 @@ describe('GET /api/admin/rooms', () => {
     );
     expect(res?.status).toBe(200);
     const body = (await (res as Response).json()) as {
-      rooms: unknown[];
-      note: string;
+      rooms: Array<{
+        id: string;
+        player_count: number;
+        last_seen: number;
+        created_at: number;
+      }>;
+      note?: string;
     };
-    expect(body.rooms).toEqual([]);
-    expect(body.note).toMatch(/live listing/i);
+    expect(body.note).toBeUndefined();
+    expect(body.rooms.map((r) => r.id)).toEqual(['ABCD', 'EFGH']);
+    expect(body.rooms[0]?.player_count).toBe(3);
+  });
+
+  it('sweeps rows whose last_seen is older than two minutes', async () => {
+    const { authStore, tStore, admin, aliceCookie } = await seed();
+    seedLiveRoom(admin, 'LIVE', NOW - 30_000, NOW - 1000, 2);
+    seedLiveRoom(admin, 'GHST', NOW - 60_000 * 5, NOW - 60_000 * 3, 0);
+    const res = await handleAdmin(
+      req('GET', '/api/admin/rooms', undefined, aliceCookie),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      rooms: Array<{ id: string }>;
+    };
+    expect(body.rooms.map((r) => r.id)).toEqual(['LIVE']);
+    expect(admin.liveRooms.has('GHST')).toBe(false);
+  });
+
+  it('omits rows that are marked closed', async () => {
+    const { authStore, tStore, admin, aliceCookie } = await seed();
+    seedLiveRoom(admin, 'LIVE', NOW - 30_000, NOW - 1000, 1);
+    seedLiveRoom(admin, 'CLSD', NOW - 30_000, NOW - 1000, 1);
+    admin.liveRooms.get('CLSD')!.closedAt = NOW - 500;
+    const res = await handleAdmin(
+      req('GET', '/api/admin/rooms', undefined, aliceCookie),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      rooms: Array<{ id: string }>;
+    };
+    expect(body.rooms.map((r) => r.id)).toEqual(['LIVE']);
   });
 });
 
 describe('POST /api/admin/rooms/:code/close', () => {
-  it('is a 501 stub', async () => {
+  it('404s an unknown room', async () => {
     const { authStore, tStore, admin, aliceCookie } = await seed();
     const res = await handleAdmin(
       req('POST', '/api/admin/rooms/ABCD/close', {}, aliceCookie),
@@ -794,7 +884,65 @@ describe('POST /api/admin/rooms/:code/close', () => {
       tStore,
       ctx(),
     );
-    expect(res?.status).toBe(501);
+    expect(res?.status).toBe(404);
+  });
+
+  it('marks closed_at and fires the direct close hook', async () => {
+    const { authStore, tStore, admin, aliceCookie } = await seed();
+    seedLiveRoom(admin, 'ABCD', NOW - 30_000, NOW - 1000, 2);
+    const seen: string[] = [];
+    const rooms: RoomCloser = {
+      async close(id: string) {
+        seen.push(id);
+      },
+    };
+    const res = await handleAdmin(
+      req('POST', '/api/admin/rooms/ABCD/close', {}, aliceCookie),
+      authStore,
+      admin,
+      tStore,
+      rooms,
+      ctx({ now: NOW + 2000 }),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+    expect(admin.liveRooms.get('ABCD')?.closedAt).toBe(NOW + 2000);
+    expect(seen).toEqual(['ABCD']);
+  });
+
+  it('swallows errors from the direct close hook', async () => {
+    const { authStore, tStore, admin, aliceCookie } = await seed();
+    seedLiveRoom(admin, 'ABCD', NOW - 30_000, NOW - 1000, 2);
+    const rooms: RoomCloser = {
+      async close() {
+        throw new Error('DO unreachable');
+      },
+    };
+    const res = await handleAdmin(
+      req('POST', '/api/admin/rooms/ABCD/close', {}, aliceCookie),
+      authStore,
+      admin,
+      tStore,
+      rooms,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    expect(admin.liveRooms.get('ABCD')?.closedAt).not.toBeNull();
+  });
+
+  it('normalizes lowercase room codes to uppercase', async () => {
+    const { authStore, tStore, admin, aliceCookie } = await seed();
+    seedLiveRoom(admin, 'ABCD', NOW - 30_000, NOW - 1000, 2);
+    const res = await handleAdmin(
+      req('POST', '/api/admin/rooms/abcd/close', {}, aliceCookie),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    expect(admin.liveRooms.get('ABCD')?.closedAt).not.toBeNull();
   });
 });
 
