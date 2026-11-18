@@ -68,13 +68,12 @@ describe('AdminUsers', () => {
 // ---------------------------------------------------------------------------
 
 describe('AdminRooms', () => {
-  it('server-renders the close field even while the list is loading', () => {
-    stubFetch(async () =>
-      jsonResponse({ rooms: [], note: 'live listing not implemented' }),
-    );
+  it('server-renders the title and a Refresh control while loading', () => {
+    stubFetch(async () => jsonResponse({ rooms: [] }));
     const html = renderToString(createElement(AdminRooms));
     expect(html).toContain('Rooms');
-    expect(html).toContain('close a room by code');
+    expect(html).toContain('Refresh');
+    expect(html).toContain('loading');
   });
 });
 

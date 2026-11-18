@@ -1,36 +1,99 @@
 /**
  * Admin Rooms tab.
  *
- * The server does not enumerate live Durable Objects today, so this tab
- * primarily surfaces the server's `note` and offers a Close control that,
- * for now, posts to a 501 stub. See web/NOTES.md for the follow-up.
+ * Lists live rooms from `GET /api/admin/rooms` with per-row Close buttons.
+ * Polls every five seconds while the document is visible so an admin
+ * watching a room empty out sees it drop from the list without manual
+ * refresh; polling pauses when the tab is hidden so a backgrounded
+ * dashboard does not bombard the worker.
  */
 
-import { useState } from 'react';
-import { Button, Field, Sheet, TextInput } from '../../ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Sheet } from '../../ui';
 import { closeAdminRoom, useAdminRooms } from '../../admin';
+
+const POLL_MS = 5000;
+
+/** Short, dependency-free relative-time formatter: "12s ago", "3m ago", etc. */
+function relative(now: number, then: number): string {
+  const d = Math.max(0, Math.floor((now - then) / 1000));
+  if (d < 60) return `${d}s ago`;
+  const m = Math.floor(d / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  return `${days}d ago`;
+}
 
 export default function AdminRooms() {
   const list = useAdminRooms();
-  const [code, setCode] = useState('');
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
-  const close = async () => {
-    const trimmed = code.trim();
-    if (trimmed.length === 0) return;
-    setPending(true);
-    setNotice(null);
-    try {
-      await closeAdminRoom(trimmed);
-      setNotice(`sent close request to ${trimmed}`);
-      await list.refresh();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'close failed');
-    } finally {
-      setPending(false);
-    }
-  };
+  // Refresh handle stays stable across re-renders so the polling effect
+  // does not reset its interval every tick.
+  const refreshRef = useRef(list.refresh);
+  refreshRef.current = list.refresh;
+
+  // Poll every 5s while the tab is visible. Any hidden->visible transition
+  // kicks off an immediate refresh so the list matches reality on re-focus.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let id: ReturnType<typeof setInterval> | null = null;
+    const tick = () => {
+      setNow(Date.now());
+      void refreshRef.current();
+    };
+    const start = () => {
+      if (id !== null) return;
+      id = setInterval(tick, POLL_MS);
+    };
+    const stop = () => {
+      if (id !== null) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        tick();
+        start();
+      }
+    };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  const close = useCallback(
+    async (id: string) => {
+      if (
+        typeof window !== 'undefined' &&
+        !window.confirm(`Close room ${id}? Every connected client will be kicked.`)
+      ) {
+        return;
+      }
+      setPending(id);
+      setNotice(null);
+      try {
+        await closeAdminRoom(id);
+        setNotice(`sent close request to ${id}`);
+        await list.refresh();
+      } catch (err) {
+        setNotice(err instanceof Error ? err.message : 'close failed');
+      } finally {
+        setPending(null);
+      }
+    },
+    [list],
+  );
 
   return (
     <Sheet
@@ -41,81 +104,57 @@ export default function AdminRooms() {
         </Button>
       }
     >
-      {list.loading ? (
+      {list.loading && !list.data ? (
         <p className="tiny muted">loading</p>
       ) : list.error ? (
         <p className="banner banner--warn">{list.error}</p>
-      ) : (
-        <>
-          {list.data?.note ? (
-            <p className="banner banner--warn">{list.data.note}</p>
-          ) : null}
-          {list.data && list.data.rooms.length > 0 ? (
-            <ul
-              style={{
-                listStyle: 'none',
-                padding: 0,
-                margin: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-              }}
-            >
-              {list.data.rooms.map((r) => (
-                <li key={r.code}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'center',
-                      padding: '8px 10px',
-                      border: '1px solid var(--line)',
-                      borderRadius: 6,
-                      background: 'var(--surface-2, var(--panel-2))',
-                    }}
-                  >
-                    <strong style={{ flex: 1 }}>{r.code}</strong>
-                    <span className="tiny muted">
-                      {r.player_count} player{r.player_count === 1 ? '' : 's'}
-                    </span>
-                    <Button
-                      small
-                      variant="danger"
-                      disabled={pending}
-                      onClick={async () => {
-                        setCode(r.code);
-                        await close();
-                      }}
-                    >
-                      Close
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="tiny muted">no live rooms to list</p>
-          )}
-        </>
-      )}
-
-      <Field label="close a room by code" hint="a 4-character room code">
-        <TextInput
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 4))}
-          placeholder="e.g. AB7K"
-        />
-      </Field>
-      <div className="row">
-        <Button
-          small
-          variant="danger"
-          onClick={() => void close()}
-          disabled={pending || code.trim().length === 0}
+      ) : list.data && list.data.rooms.length > 0 ? (
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: '0.9em',
+          }}
         >
-          {pending ? 'Closing…' : 'Close room'}
-        </Button>
-      </div>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
+              <th style={{ padding: '6px 8px' }}>id</th>
+              <th style={{ padding: '6px 8px' }}>created</th>
+              <th style={{ padding: '6px 8px' }}>players</th>
+              <th style={{ padding: '6px 8px' }}>last seen</th>
+              <th style={{ padding: '6px 8px' }} />
+            </tr>
+          </thead>
+          <tbody>
+            {list.data.rooms.map((r) => (
+              <tr key={r.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>
+                  <strong>{r.id}</strong>
+                </td>
+                <td style={{ padding: '6px 8px' }} className="tiny muted">
+                  {relative(now, r.created_at)}
+                </td>
+                <td style={{ padding: '6px 8px' }}>{r.player_count}</td>
+                <td style={{ padding: '6px 8px' }} className="tiny muted">
+                  {relative(now, r.last_seen)}
+                </td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}>
+                  <Button
+                    small
+                    variant="danger"
+                    disabled={pending === r.id}
+                    onClick={() => void close(r.id)}
+                  >
+                    {pending === r.id ? 'Closing…' : 'Close'}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="tiny muted">no live rooms right now</p>
+      )}
       {notice ? <p className="banner banner--warn">{notice}</p> : null}
     </Sheet>
   );

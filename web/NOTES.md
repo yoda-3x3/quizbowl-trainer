@@ -197,18 +197,43 @@ that is the natural next step and belongs to whoever owns the bank.
 
 ## Admin dashboard (Task 3 of the auth/tournaments flow)
 
-17. **Live room listing and close are not implemented server-side.** Cloudflare
-    Durable Objects expose no enumeration primitive and `workers/room/room.ts`
-    is an owned file that the admin task was not allowed to extend with a
-    `close` hook. As a result `GET /api/admin/rooms` returns
-    `{ rooms: [], note: 'live listing not implemented' }` and
-    `POST /api/admin/rooms/:code/close` returns 501 with an explanatory error.
-    The next unit of work for live rooms would either (a) have the DO register
-    itself in a KV index on first join and deregister on idle teardown, so the
-    admin can list by scanning that index, or (b) add a `close` method on the
-    DO that broadcasts a `{kind:'closed',reason:'closed by admin'}` message and
-    `blockConcurrencyWhile` drains the socket set before throwing. Either is a
-    room-engine change and belongs to whoever owns `room.ts`.
+17. **CLOSED (2026-11-17).** Live room listing and admin close are now
+    backed by a D1 index. Migration `0004_live_rooms.sql` adds a
+    `live_rooms(id, created_at, last_seen, player_count, closed_at)` table;
+    the Room DO upserts on each websocket accept, touches `last_seen` on
+    every message/commit, and deletes its row on the last disconnect or the
+    idle-teardown alarm. `GET /api/admin/rooms` lists live rows after
+    sweeping rows older than two minutes, so an ungracefully evicted DO
+    never produces a ghost. `POST /api/admin/rooms/:code/close` writes
+    `closed_at` on the row and best-effort calls the DO's new
+    `/__internal/close` route, which checks a shared secret header against
+    `env.INTERNAL_SECRET` (constant-time compare), broadcasts
+    `{t:'closed',reason:'closed by admin'}` to every client, and drains the
+    socket set inside `blockConcurrencyWhile`. A DO that missed the direct
+    call still drains on its next heartbeat because it reads `closed_at`
+    back from the `RETURNING` clause of its touch upsert.
+
+    **D1 over KV / an index DO.** D1 fits the existing pattern (the admin
+    dashboard already lists tournaments / protests from D1), writes are
+    cheap, and we need a sweep for stale rows anyway. KV's eventual
+    consistency would surface rooms that no longer exist; an index DO
+    would add an extra DO.fetch on every connect.
+
+    **Owned-file edits.** `room.ts`, `index.ts` and `protocol.ts` are owned
+    files, touched here following the precedent set by Card B's auth work
+    and Card F's attempts endpoints: the file was marked owned before an
+    admin console existed, and there is no other way to add live-room
+    registration. The engine state machine in `engine.ts` is untouched.
+
+    **Degradation.** Every D1 call in the DO is wrapped in try/catch and
+    logs on failure, so a D1 outage degrades to "the admin dashboard
+    can't see this room" rather than breaking solo practice or play.
+
+    **Deployment.** Set the shared secret once per environment with
+    `wrangler secret put INTERNAL_SECRET` (prompts for a value). A missing
+    secret causes the DO to refuse every `/__internal/close` call with
+    403; the `closed_at` fallback still works, so the admin close takes
+    effect on the DO's next heartbeat even then.
 
 18. **Packets are not persisted server-side.** The importer in `src/import/`
     parses in the browser and hands results to the host's local queue (see the

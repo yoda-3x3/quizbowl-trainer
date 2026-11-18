@@ -37,13 +37,15 @@ export interface AdminUserList {
 }
 
 export interface AdminRoom {
-  code: string;
-  started_at: number | null;
+  id: string;
+  created_at: number;
+  last_seen: number;
   player_count: number;
 }
 
 export interface AdminRoomList {
   rooms: AdminRoom[];
+  /** Legacy field, carried only for an older server that still sends it. */
   note?: string;
 }
 
