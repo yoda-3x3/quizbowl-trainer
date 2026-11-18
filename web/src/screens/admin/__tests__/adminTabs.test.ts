@@ -116,3 +116,131 @@ describe('AdminProtests', () => {
     expect(selectedBlock).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// ProtestRow — restitution surface
+// ---------------------------------------------------------------------------
+
+import { ProtestRow } from '../Protests';
+import type { AdminProtest } from '../../../admin';
+
+function protestStub(over: Partial<AdminProtest> = {}): AdminProtest {
+  return {
+    id: 1,
+    tournament_id: 1,
+    tournament_name: 'Friday Quiz',
+    question_id: 'q0',
+    raised_by: 2,
+    raised_by_username: 'bob',
+    reason: 'answer should have been accepted',
+    given_answer: 'dickens',
+    state: 'pending',
+    created_at: 1_700_000_000_000,
+    resolved_by: null,
+    resolved_at: null,
+    resolved_note: null,
+    restitution_delta: null,
+    ...over,
+  };
+}
+
+describe('ProtestRow', () => {
+  const noop = () => {};
+
+  it('shows a positive restitution on an accepted protest', () => {
+    const html = renderToString(
+      createElement(ProtestRow, {
+        protest: protestStub({
+          state: 'accepted',
+          restitution_delta: 15,
+          resolved_at: 1,
+          resolved_by: 1,
+        }),
+        note: '',
+        busy: false,
+        onNoteChange: noop,
+        onAccept: noop,
+        onReject: noop,
+      }),
+    );
+    expect(html).toContain('restitution:');
+    // React SSR injects `<!-- -->` between adjacent text nodes, so the sign,
+    // number and unit are joined with those markers. Assert on fragments.
+    expect(html).toMatch(/\+.*15.*pts/s);
+    expect(html).toContain('var(--good');
+  });
+
+  it('shows a zero-delta note when the player already had the points', () => {
+    const html = renderToString(
+      createElement(ProtestRow, {
+        protest: protestStub({
+          state: 'accepted',
+          restitution_delta: 0,
+          resolved_at: 1,
+          resolved_by: 1,
+        }),
+        note: '',
+        busy: false,
+        onNoteChange: noop,
+        onAccept: noop,
+        onReject: noop,
+      }),
+    );
+    expect(html).toContain('no change');
+  });
+
+  it('shows "no attempt row to adjust" when restitution_delta is null', () => {
+    const html = renderToString(
+      createElement(ProtestRow, {
+        protest: protestStub({
+          state: 'accepted',
+          restitution_delta: null,
+          resolved_at: 1,
+          resolved_by: 1,
+        }),
+        note: '',
+        busy: false,
+        onNoteChange: noop,
+        onAccept: noop,
+        onReject: noop,
+      }),
+    );
+    expect(html).toContain('no attempt row to adjust');
+  });
+
+  it('does not render a restitution line on a rejected protest', () => {
+    const html = renderToString(
+      createElement(ProtestRow, {
+        protest: protestStub({
+          state: 'rejected',
+          restitution_delta: null,
+          resolved_at: 1,
+          resolved_by: 1,
+        }),
+        note: '',
+        busy: false,
+        onNoteChange: noop,
+        onAccept: noop,
+        onReject: noop,
+      }),
+    );
+    expect(html).not.toContain('restitution:');
+  });
+
+  it('does not render a restitution line on a pending protest', () => {
+    const html = renderToString(
+      createElement(ProtestRow, {
+        protest: protestStub({ state: 'pending' }),
+        note: '',
+        busy: false,
+        onNoteChange: noop,
+        onAccept: noop,
+        onReject: noop,
+      }),
+    );
+    expect(html).not.toContain('restitution:');
+    // Pending still exposes the Accept/Reject controls.
+    expect(html).toContain('Accept');
+    expect(html).toContain('Reject');
+  });
+});

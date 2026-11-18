@@ -180,21 +180,20 @@ that is the natural next step and belongs to whoever owns the bank.
     the four-tab constraint. The new order is Practice / Learn / Rooms /
     Tourneys / Settings (label truncated so the row still fits at 390px). The
     `?` help card and the number shortcuts (1-5 now) were updated in lockstep.
-15. **The persisted question sequence does not drive the Tossup reader.** The
-    worker stores the pinned `tournament_questions(seq, question_id)` rows at
-    `/start`, but the running-state view embeds the existing Tossup as-is,
-    which pulls questions from the live `TossupQueue` under the player's own
-    filters. The pinned ids exist so a protest refers to a concrete question,
-    not a guess, but every player can still see a different sequence. A proper
-    sequencer that fetches each pinned id in order and feeds it to the reader
-    is called out here as the next unit of work; it was deferred so Tossup did
-    not need a disruptive refactor for this task.
-16. **The `tossups_bonuses` format picks tossup ids for the bonus slots.**
-    `pickQuestionIds` in `TournamentDetail.tsx` only talks to `TossupQueue`, so
-    the slots after `n_tossups` are flagged `question_kind: 'bonus'` but hold a
-    tossup id. A real bonus picker belongs with the client, and the server
-    endpoint already accepts the kind field, so this is a one-screen fix when
-    the bonus flow is designed.
+15. **CLOSED (2026-11-17).** The pinned sequence now drives the reader. A new
+    `GET /api/tournaments/:id/questions/:seq` endpoint resolves each stored
+    `question_id` through QB Reader with a per-isolate LRU cache; the client
+    walks seq 0..N-1 through `fetchTournamentQuestion`. `TossupSource` and
+    `BonusSource` props on `Tossup`/`Bonus` let the sequencer override the
+    question stream while preserving solo behaviour: those props are
+    undefined outside tournaments, so the solo tests are byte-identical.
+    Touching the owned `Tossup.tsx` was called out in the task brief; the
+    hook-shaped prop is additive and the owned `reader.ts` was not changed.
+16. **CLOSED (2026-11-17).** `pickQuestionIds` now splits picks between a
+    `TossupQueue` and `fetchBonuses`, so a `tossups_bonuses` tournament
+    pins real bonus ids for its bonus slots. The pure logic lives in
+    `src/screens/tournamentSequence.ts` with dependency-injected fetchers,
+    and is covered by `tournamentSequence.test.ts`.
 
 ## Admin dashboard (Task 3 of the auth/tournaments flow)
 
@@ -219,15 +218,19 @@ that is the natural next step and belongs to whoever owns the bank.
     reason. If packet sharing is ever moved server-side, these two endpoints
     are the hook the admin dashboard will consume.
 
-19. **Accepting a protest does not yet restitute points.** The resolve endpoint
-    writes `state`, `resolved_by`, `resolved_at` and `resolved_note` on the
-    protest row, and that is all it does. Per-player scoring is still
-    client-side (every tournament player reads from their own `AttemptEvent`
-    log), so the worker has nothing to rewrite when a protest is accepted. A
-    later chunk will need to surface the accepted protest on the client,
-    rewrite the relevant `AttemptEvent`, and recompute the running score for
-    that player. The server part of that change is independent from the
-    endpoints shipped in this task.
+19. **CLOSED (2026-11-17).** A new `tournament_attempts` table (migration
+    `0003_tournament_attempts.sql`) stores one row per resolved tossup or
+    bonus part per player, which the client now POSTs through
+    `/api/tournaments/:id/attempts`. The scoreboard at
+    `/api/tournaments/:id/scoreboard` sums `points + restitution_delta`
+    per player. When the admin accepts a protest, the resolve endpoint
+    finds the matching attempt, computes the correct-point target using
+    the owned `scoreTossup`/`scoreBonusPart` from `src/engine/scoring.ts`
+    (the Worker imports them across the src/workers boundary intentionally
+    so there is only one copy of the scoring rules), and writes
+    `restitution_delta` onto the row. The admin Protests tab surfaces the
+    delta. Live scoreboard renders in `TournamentDetail` whenever the
+    tournament is running or finished.
 
 20. **Admin dashboard is a hidden route, not a tab.** Per the task brief the
     five-tab bar is unchanged. Admins open the dashboard from a link in the

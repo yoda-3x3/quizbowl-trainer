@@ -1,12 +1,13 @@
 /**
- * One tournament: players, state, Join / Start controls, and a Tossup reader
- * once the tournament is running.
+ * One tournament: players, state, Join / Start controls, the sequencer that
+ * drives Tossup / Bonus while it is running, and the live scoreboard.
  *
- * The question picker lives in Tossup via TossupQueue, so Start fetches the
- * pinned sequence here just to persist the ids server-side (so a protest has a
- * concrete question_id to refer to), then hands the actual question reveal to
- * Tossup for the live play. A richer sequencer could walk the saved ids in a
- * fixed order; that is called out in NOTES.md.
+ * The picker in `OpenControls` fetches both tossup and bonus ids at Start,
+ * matching the stored `question_kind`. The sequencer in `PlayView` walks
+ * those pinned rows: a run of tossups mounts a single Tossup backed by a
+ * `TossupSource`, and each bonus seq mounts a Bonus backed by a one-shot
+ * `BonusSource`. After each resolve the attempt is persisted to the server
+ * and the scoreboard refreshes.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -144,8 +145,52 @@ export default function TournamentDetail({ id, onExit }: TournamentDetailProps) 
           <p className="tiny muted">no further action</p>
         </Sheet>
       )}
+
+      {tournament.state === 'running' || tournament.state === 'finished' ? (
+        <LiveScoreboard tournamentId={tournament.id} meId={me?.id ?? null} />
+      ) : null}
     </Screen>
   );
+}
+
+function LiveScoreboard({
+  tournamentId,
+  meId,
+}: {
+  tournamentId: number;
+  meId: number | null;
+}) {
+  const [scoreboard, setScoreboard] = useState<ScoreboardEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setScoreboard(await fetchScoreboard(tournamentId));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to load');
+    }
+  }, [tournamentId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  if (error) {
+    return (
+      <Sheet title="Scoreboard">
+        <p className="banner banner--warn">{error}</p>
+      </Sheet>
+    );
+  }
+  if (!scoreboard) {
+    return (
+      <Sheet title="Scoreboard">
+        <p className="tiny muted">loading</p>
+      </Sheet>
+    );
+  }
+  return <ScoreboardSheet scoreboard={scoreboard} meId={meId} />;
 }
 
 // ---------------------------------------------------------------------------

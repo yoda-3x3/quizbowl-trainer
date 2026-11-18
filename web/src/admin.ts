@@ -74,6 +74,13 @@ export interface AdminProtest {
   resolved_by: number | null;
   resolved_at: number | null;
   resolved_note: string | null;
+  /**
+   * Points added to the player's scoreboard when the protest was accepted.
+   * Null for pending or rejected protests, and also null when an accepted
+   * protest has no matching attempt row (e.g. the client crashed before
+   * recording the question).
+   */
+  restitution_delta: number | null;
 }
 
 // ---------------------------------------------------------------------------

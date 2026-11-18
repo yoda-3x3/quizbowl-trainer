@@ -2,9 +2,9 @@
  * Admin Protests tab.
  *
  * Lists pending protests by default, with Accept / Reject controls and an
- * optional note field. After the mutation succeeds the row drops out of the
- * pending list on the next refresh. Point restitution is not yet implemented
- * server-side: see web/NOTES.md, point 19.
+ * optional note field. An accepted protest now restitutes points server-side
+ * (NOTES.md point 19); the computed delta appears next to each resolved row
+ * so the admin can see the effect of their ruling.
  */
 
 import { useState } from 'react';
@@ -132,7 +132,7 @@ export default function AdminProtests() {
   );
 }
 
-function ProtestRow({
+export function ProtestRow({
   protest,
   note,
   busy,
@@ -177,6 +177,26 @@ function ProtestRow({
       <div className="tiny">{protest.reason}</div>
       {protest.resolved_note ? (
         <div className="tiny muted">note: {protest.resolved_note}</div>
+      ) : null}
+      {protest.state === 'accepted' ? (
+        <div className="tiny">
+          <span className="muted">restitution:</span>{' '}
+          {protest.restitution_delta === null ? (
+            <span className="muted">no attempt row to adjust</span>
+          ) : protest.restitution_delta === 0 ? (
+            <span className="muted">no change (player already scored)</span>
+          ) : (
+            <strong style={{
+              color:
+                protest.restitution_delta > 0
+                  ? 'var(--good, #0a7a2a)'
+                  : 'var(--bad, #a21818)',
+            }}>
+              {protest.restitution_delta > 0 ? '+' : ''}
+              {protest.restitution_delta} pts
+            </strong>
+          )}
+        </div>
       ) : null}
       {!resolved ? (
         <>
