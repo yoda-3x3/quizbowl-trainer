@@ -2,12 +2,19 @@
  * Pages Function: proxy every `/api/*` request to the Rooms Worker.
  *
  * Cloudflare Pages does not call a sibling Worker automatically. This
- * catch-all route forwards the request verbatim (method, headers, body) to
- * the deployed `quizbowl-rooms` Worker and returns its response.
+ * catch-all forwards the request verbatim (method, headers, body, and the
+ * WebSocket upgrade intent) to the `quizbowl-rooms` Worker and returns the
+ * response as-is.
  *
- * `WORKER_ORIGIN` is set in the Pages project settings (e.g.
- * `https://quizbowl-rooms.<account>.workers.dev`). Falls back to a
- * placeholder in dev so the error is obvious.
+ * `WORKER_ORIGIN` is a Pages environment variable (e.g.
+ * `https://quizbowl-rooms.<account>.workers.dev`). If it's missing, this
+ * returns a 500 that names the fix so the front-end doesn't just see a blank
+ * failure.
+ *
+ * WebSocket pass-through works because Cloudflare's `fetch` carries the
+ * upgrade when the original `Request` is handed back to it; constructing a
+ * new `Request` and manually copying headers drops it. So we clone the
+ * request against a new URL and let the runtime handle the handshake.
  */
 
 interface Env {
@@ -26,25 +33,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   const url = new URL(request.url);
   const target = new URL(url.pathname + url.search, origin);
 
-  // Preserve method, headers, and body. Cookie must carry through so the
-  // Worker can resolve the session.
-  const init: RequestInit = {
-    method: request.method,
-    headers: request.headers,
-    body:
-      request.method === 'GET' || request.method === 'HEAD'
-        ? undefined
-        : request.body,
-    redirect: 'manual',
-  };
+  // Rebuilding the Request with the new URL preserves the original body and
+  // header set, including the `Upgrade: websocket` handshake. A naive
+  // `new Response(fetch(url, { headers, body }))` loses the upgrade intent
+  // and the Rooms websocket silently 400s.
+  const upstream = new Request(target.toString(), request);
 
-  const upstream = await fetch(target.toString(), init);
-
-  // Return a new Response so Pages doesn't try to reuse the upstream body
-  // in a way that hits "Body is unusable" edge cases.
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: upstream.headers,
-  });
+  return fetch(upstream);
 };
