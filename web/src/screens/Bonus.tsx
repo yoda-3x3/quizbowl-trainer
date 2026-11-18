@@ -80,11 +80,25 @@ interface PartResult {
   points: number;
 }
 
-export interface BonusProps {
-  onExit(): void;
+/**
+ * Tournament hook — same shape as `TossupSource`. When set, `loadNext()`
+ * calls `next()` rather than `fetchBonuses`, `onResolved` fires for each
+ * resolved part, and `onEnd` fires when the sequencer runs out so the
+ * parent can mount the next seq (another bonus, a tossup burst, or the
+ * finish screen).
+ */
+export interface BonusSource {
+  next(): Promise<BonusQuestion | null>;
+  onResolved?(event: AttemptEvent): void;
+  onEnd?(): void;
 }
 
-export default function Bonus({ onExit }: BonusProps) {
+export interface BonusProps {
+  onExit(): void;
+  source?: BonusSource;
+}
+
+export default function Bonus({ onExit, source }: BonusProps) {
   const [settings] = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const poolRef = useRef<BonusQuestion[]>([]);
@@ -100,6 +114,8 @@ export default function Bonus({ onExit }: BonusProps) {
   const [dry, setDry] = useState(false);
 
   const filters = useMemo(() => filtersFrom(settings), [settings]);
+  const sourceRef = useRef<BonusSource | undefined>(source);
+  sourceRef.current = source;
 
   // A filter change invalidates the prefetched pool, same as the tossup queue.
   useEffect(() => {
@@ -113,25 +129,35 @@ export default function Bonus({ onExit }: BonusProps) {
     setGiven('');
     setDry(false);
 
-    if (poolRef.current.length === 0) {
-      try {
-        const batch = await fetchBonuses(filters, 20);
-        poolRef.current = batch.filter((b) => !seenRef.current.has(b.id));
-        setOffline(false);
-        if (batch.length > 0) void cacheBonuses(batch);
-      } catch {
-        setOffline(true);
-        const cached = pickUnseen(await cachedBonuses(), seenRef.current);
-        poolRef.current = cached ? [cached] : [];
+    let next: BonusQuestion | null = null;
+
+    if (sourceRef.current) {
+      // Tournament mode: the sequencer picks the bonus. The upstream pool and
+      // cache are bypassed so every player sees the same pinned bonus.
+      next = await sourceRef.current.next();
+    } else {
+      if (poolRef.current.length === 0) {
+        try {
+          const batch = await fetchBonuses(filters, 20);
+          poolRef.current = batch.filter((b) => !seenRef.current.has(b.id));
+          setOffline(false);
+          if (batch.length > 0) void cacheBonuses(batch);
+        } catch {
+          setOffline(true);
+          const cached = pickUnseen(await cachedBonuses(), seenRef.current);
+          poolRef.current = cached ? [cached] : [];
+        }
       }
+      next = poolRef.current.shift() ?? null;
     }
 
-    const next = poolRef.current.shift() ?? null;
     setLoading(false);
 
     if (!next) {
       setCurrent(null);
       setDry(true);
+      // Tournament hook: tell the sequencer we're out so it can advance.
+      sourceRef.current?.onEnd?.();
       return;
     }
     seenRef.current.add(next.id);
@@ -182,6 +208,9 @@ export default function Bonus({ onExit }: BonusProps) {
         },
       };
       void append(event).then(() => all().then(setEvents));
+      // Tournament hook: a bonus part is an attempt in its own right, so
+      // notify the sequencer for each one, not just at the end of the bonus.
+      sourceRef.current?.onResolved?.(event);
       setResults((prev) => [...prev, { directive, given: answer, points }]);
     },
     [current],

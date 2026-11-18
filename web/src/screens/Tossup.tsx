@@ -40,6 +40,23 @@ export interface TossupProtestPayload {
   reason: string;
 }
 
+/**
+ * Overrides where Tossup gets its questions from. When set, `loadNext()`
+ * calls `next()` in place of `TossupQueue`, and `onResolved` fires with the
+ * resolved event so the parent can persist a tournament attempt. `onEnd`
+ * fires when `next()` returns null and lets the parent transition instead
+ * of this screen's "out of questions" state.
+ *
+ * The presence of this prop is what switches Tossup to tournament mode.
+ * Solo practice leaves it undefined and gets exactly the behavior it had
+ * before this prop existed.
+ */
+export interface TossupSource {
+  next(): Promise<TossupQuestion | null>;
+  onResolved?(event: AttemptEvent): void;
+  onEnd?(): void;
+}
+
 export interface TossupProps {
   /** Back to the practice home. */
   onExit(): void;
@@ -50,9 +67,13 @@ export interface TossupProps {
    * keeps the button out of non-tournament contexts.
    */
   onProtest?(payload: TossupProtestPayload): void | Promise<void>;
+  /**
+   * Tournament mode: override the question stream. See `TossupSource`.
+   */
+  source?: TossupSource;
 }
 
-export default function Tossup({ onExit, onProtest }: TossupProps) {
+export default function Tossup({ onExit, onProtest, source }: TossupProps) {
   const [settings] = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<TossupQueue | null>(null);
@@ -91,8 +112,14 @@ export default function Tossup({ onExit, onProtest }: TossupProps) {
     queueRef.current?.setFilters(filters);
   }, [filters]);
 
+  const sourceRef = useRef<TossupSource | undefined>(source);
+  sourceRef.current = source;
+
   const handleResolved = useCallback((e: AttemptEvent) => {
     void append(e).then(() => all().then(setEvents));
+    // Tournament hook: notify the sequencer so it can persist a server-side
+    // attempt row and refresh the scoreboard.
+    sourceRef.current?.onResolved?.(e);
   }, []);
 
   const reader = useReader({
@@ -116,14 +143,21 @@ export default function Tossup({ onExit, onProtest }: TossupProps) {
     setGiven('');
     setDry(false);
 
-    let next = await queueRef.current!.next();
+    let next: TossupQuestion | null;
     let cached = false;
 
-    // Last resort: the network is down and the bundled pack is exhausted, so
-    // replay something we fetched earlier rather than dead-ending.
-    if (!next) {
-      next = pickUnseen(await cachedTossups(), seenRef.current);
-      cached = next !== null;
+    if (sourceRef.current) {
+      // Tournament mode: the sequencer owns the question stream. Cache + queue
+      // are bypassed so every player sees the same pinned id.
+      next = await sourceRef.current.next();
+    } else {
+      next = await queueRef.current!.next();
+      // Last resort: the network is down and the bundled pack is exhausted, so
+      // replay something we fetched earlier rather than dead-ending.
+      if (!next) {
+        next = pickUnseen(await cachedTossups(), seenRef.current);
+        cached = next !== null;
+      }
     }
 
     setLoading(false);
@@ -132,6 +166,9 @@ export default function Tossup({ onExit, onProtest }: TossupProps) {
     if (!next) {
       setDry(true);
       busyRef.current = false;
+      // Tournament hook: tell the sequencer we're out so it can advance to
+      // the next seq (another tossup burst, a bonus, or the finish screen).
+      sourceRef.current?.onEnd?.();
       return;
     }
 

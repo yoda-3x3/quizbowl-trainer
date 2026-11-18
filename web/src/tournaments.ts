@@ -67,6 +67,76 @@ export interface Protest {
   resolved_note: string | null;
 }
 
+export interface PublicTossupRow {
+  id: string;
+  question: string;
+  question_sanitized: string;
+  answer: string;
+  answer_sanitized: string;
+  category: string;
+  subcategory: string;
+  difficulty: number;
+  set_name: string;
+  set_year: number;
+  packet_number: number;
+  question_number: number;
+}
+
+export interface PublicBonusRow {
+  id: string;
+  leadin: string;
+  leadin_sanitized: string;
+  parts: string[];
+  parts_sanitized: string[];
+  answers: string[];
+  answers_sanitized: string[];
+  values: number[] | null;
+  category: string;
+  subcategory: string;
+  difficulty: number;
+  set_name: string;
+}
+
+export type SeqQuestion =
+  | {
+      seq: number;
+      question_id: string;
+      question_kind: 'tossup';
+      total: number;
+      tossup: PublicTossupRow;
+    }
+  | {
+      seq: number;
+      question_id: string;
+      question_kind: 'bonus';
+      total: number;
+      bonus: PublicBonusRow;
+    };
+
+export type AttemptDirective = 'accept' | 'prompt' | 'reject';
+
+export interface AttemptInput {
+  seq: number;
+  question_id: string;
+  given_answer: string;
+  directive: AttemptDirective;
+  points: number;
+  powered: boolean;
+  buzz_word_index: number | null;
+  total_words: number;
+  power_word_index: number | null;
+  ms_to_answer: number | null;
+}
+
+export interface ScoreboardEntry {
+  user_id: number;
+  username: string;
+  team: string;
+  base_points: number;
+  restitution_delta: number;
+  points: number;
+}
+
 export interface CreateTournamentInput {
   name: string;
   format: TournamentFormat;
@@ -179,6 +249,41 @@ export async function listProtests(tournamentId: number): Promise<Protest[]> {
     `/api/tournaments/${tournamentId}/protests`,
   );
   return body.protests ?? [];
+}
+
+/**
+ * Fetch the pinned question at `seq`. The server resolves the stored
+ * question id through QB Reader and caches the result, so every player in a
+ * tournament sees the same question text in the same order.
+ */
+export async function fetchTournamentQuestion(
+  tournamentId: number,
+  seq: number,
+): Promise<SeqQuestion> {
+  return getJson<SeqQuestion>(
+    `/api/tournaments/${tournamentId}/questions/${seq}`,
+  );
+}
+
+/** Persist a resolved tournament question. The server scores the scoreboard. */
+export async function recordAttempt(
+  tournamentId: number,
+  input: AttemptInput,
+): Promise<{ id: number }> {
+  return postJson<{ id: number }>(
+    `/api/tournaments/${tournamentId}/attempts`,
+    input,
+  );
+}
+
+/** Live scoreboard: base points + any restitution deltas per player. */
+export async function fetchScoreboard(
+  tournamentId: number,
+): Promise<ScoreboardEntry[]> {
+  const body = await getJson<{ scoreboard: ScoreboardEntry[] }>(
+    `/api/tournaments/${tournamentId}/scoreboard`,
+  );
+  return body.scoreboard ?? [];
 }
 
 // ---------------------------------------------------------------------------
