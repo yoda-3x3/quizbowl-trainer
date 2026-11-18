@@ -68,6 +68,35 @@ export interface ProtestRow {
   resolvedNote: string | null;
 }
 
+export type AttemptDirective = 'accept' | 'prompt' | 'reject';
+
+/**
+ * One resolved tossup or bonus part in a tournament. The server is the source
+ * of truth for scoreboard totals, and a protest restitutes points by writing
+ * a `restitutionDelta` onto the matching row (see admin.ts).
+ *
+ * For a bonus part the client's `questionId` is `<bonusId>#<partIndex>`,
+ * matching how Bonus.tsx already shapes `AttemptEvent.questionId`.
+ */
+export interface AttemptRow {
+  id: number;
+  tournamentId: number;
+  userId: number;
+  seq: number;
+  questionId: string;
+  givenAnswer: string;
+  directive: AttemptDirective;
+  points: number;
+  powered: boolean;
+  buzzWordIndex: number | null;
+  totalWords: number;
+  powerWordIndex: number | null;
+  msToAnswer: number | null;
+  createdAt: number;
+  restitutedAt: number | null;
+  restitutionDelta: number;
+}
+
 /**
  * The storage shape the tournament endpoints need. The production
  * implementation is built from a D1Database with `d1TournamentStore()`; tests
@@ -95,6 +124,19 @@ export interface TournamentStore {
   createProtest(p: Omit<ProtestRow, 'id'>): Promise<number>;
   listProtestsForUser(tournamentId: number, userId: number): Promise<ProtestRow[]>;
   listProtestsForTournament(tournamentId: number): Promise<ProtestRow[]>;
+
+  createAttempt(a: Omit<AttemptRow, 'id'>): Promise<number>;
+  listAttempts(tournamentId: number): Promise<AttemptRow[]>;
+  findAttemptForProtest(
+    tournamentId: number,
+    userId: number,
+    questionId: string,
+  ): Promise<AttemptRow | null>;
+  applyAttemptRestitution(
+    attemptId: number,
+    delta: number,
+    restitutedAt: number,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +153,8 @@ export const PROTEST_REASON_MAX = 1000;
 export const TEAM_MAX = 40;
 
 export const PROTEST_RATE_LIMIT_MAX = 5;
+export const ATTEMPT_RATE_LIMIT_MAX = 200;
+export const ATTEMPT_ANSWER_MAX = 500;
 
 function isFormat(v: unknown): v is TournamentFormat {
   return v === 'tossups' || v === 'tossups_bonuses';
@@ -118,6 +162,10 @@ function isFormat(v: unknown): v is TournamentFormat {
 
 function isKind(v: unknown): v is QuestionKind {
   return v === 'tossup' || v === 'bonus';
+}
+
+function isDirective(v: unknown): v is AttemptDirective {
+  return v === 'accept' || v === 'prompt' || v === 'reject';
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +204,10 @@ function kindOf(v: unknown): QuestionKind {
   return v === 'bonus' ? 'bonus' : 'tossup';
 }
 
+function directiveOf(v: unknown): AttemptDirective {
+  return v === 'accept' || v === 'prompt' || v === 'reject' ? v : 'reject';
+}
+
 function rowToTournament(row: Record<string, unknown>): TournamentRow {
   return {
     id: num(row.id),
@@ -186,6 +238,27 @@ function rowToQuestion(row: Record<string, unknown>): TournamentQuestionRow {
     seq: num(row.seq),
     questionId: String(row.question_id ?? ''),
     questionKind: kindOf(row.question_kind),
+  };
+}
+
+function rowToAttempt(row: Record<string, unknown>): AttemptRow {
+  return {
+    id: num(row.id),
+    tournamentId: num(row.tournament_id),
+    userId: num(row.user_id),
+    seq: num(row.seq),
+    questionId: String(row.question_id ?? ''),
+    givenAnswer: String(row.given_answer ?? ''),
+    directive: directiveOf(row.directive),
+    points: num(row.points),
+    powered: num(row.powered) === 1,
+    buzzWordIndex: numOrNull(row.buzz_word_index),
+    totalWords: num(row.total_words),
+    powerWordIndex: numOrNull(row.power_word_index),
+    msToAnswer: numOrNull(row.ms_to_answer),
+    createdAt: num(row.created_at),
+    restitutedAt: numOrNull(row.restituted_at),
+    restitutionDelta: num(row.restitution_delta),
   };
 }
 
@@ -385,7 +458,286 @@ export function d1TournamentStore(db: D1Database): TournamentStore {
       const rows = res.results ?? [];
       return rows.map(rowToProtest);
     },
+
+    async createAttempt(a) {
+      const res = await db
+        .prepare(
+          `INSERT INTO tournament_attempts
+             (tournament_id, user_id, seq, question_id, given_answer, directive,
+              points, powered, buzz_word_index, total_words, power_word_index,
+              ms_to_answer, created_at, restituted_at, restitution_delta)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          a.tournamentId,
+          a.userId,
+          a.seq,
+          a.questionId,
+          a.givenAnswer,
+          a.directive,
+          a.points,
+          a.powered ? 1 : 0,
+          a.buzzWordIndex,
+          a.totalWords,
+          a.powerWordIndex,
+          a.msToAnswer,
+          a.createdAt,
+          a.restitutedAt,
+          a.restitutionDelta,
+        )
+        .run();
+      const meta = (res as { meta?: { last_row_id?: number } }).meta;
+      return num(meta?.last_row_id);
+    },
+
+    async listAttempts(tournamentId) {
+      const res = await db
+        .prepare(
+          `SELECT id, tournament_id, user_id, seq, question_id, given_answer,
+                  directive, points, powered, buzz_word_index, total_words,
+                  power_word_index, ms_to_answer, created_at, restituted_at,
+                  restitution_delta
+             FROM tournament_attempts
+             WHERE tournament_id = ?
+             ORDER BY created_at ASC`,
+        )
+        .bind(tournamentId)
+        .all<Record<string, unknown>>();
+      const rows = res.results ?? [];
+      return rows.map(rowToAttempt);
+    },
+
+    async findAttemptForProtest(tournamentId, userId, questionId) {
+      // A protest cites a tournament question id; for bonuses the client's
+      // attempt rows use `<bonusId>#<partIndex>`, so match both the exact id
+      // and any bonus-part suffix. Most recent wins, since a player cannot
+      // see the same tossup twice in one tournament but a stale attempt from
+      // another match should not block a new protest.
+      const row = await db
+        .prepare(
+          `SELECT id, tournament_id, user_id, seq, question_id, given_answer,
+                  directive, points, powered, buzz_word_index, total_words,
+                  power_word_index, ms_to_answer, created_at, restituted_at,
+                  restitution_delta
+             FROM tournament_attempts
+             WHERE tournament_id = ? AND user_id = ?
+               AND (question_id = ? OR question_id LIKE ?)
+             ORDER BY created_at DESC
+             LIMIT 1`,
+        )
+        .bind(tournamentId, userId, questionId, `${questionId}#%`)
+        .first<Record<string, unknown>>();
+      return row ? rowToAttempt(row) : null;
+    },
+
+    async applyAttemptRestitution(attemptId, delta, restitutedAt) {
+      await db
+        .prepare(
+          `UPDATE tournament_attempts
+             SET restitution_delta = ?, restituted_at = ?
+             WHERE id = ?`,
+        )
+        .bind(delta, restitutedAt, attemptId)
+        .run();
+    },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Question fetcher (for the seq-driven reader) and its LRU cache
+// ---------------------------------------------------------------------------
+
+export interface PublicTossup {
+  id: string;
+  question: string;
+  question_sanitized: string;
+  answer: string;
+  answer_sanitized: string;
+  category: string;
+  subcategory: string;
+  difficulty: number;
+  set_name: string;
+  set_year: number;
+  packet_number: number;
+  question_number: number;
+}
+
+export interface PublicBonus {
+  id: string;
+  leadin: string;
+  leadin_sanitized: string;
+  parts: string[];
+  parts_sanitized: string[];
+  answers: string[];
+  answers_sanitized: string[];
+  values: number[] | null;
+  category: string;
+  subcategory: string;
+  difficulty: number;
+  set_name: string;
+}
+
+/**
+ * Backend that resolves a pinned `question_id` into the shape the client needs
+ * to drive the reader. Production builds `qbReaderQuestionFetcher()`, which
+ * talks to QB Reader over HTTPS; tests pass a fake with an in-memory map so
+ * the dispatch logic runs without the network.
+ */
+export interface QuestionFetcher {
+  fetchTossup(id: string): Promise<PublicTossup | null>;
+  fetchBonus(id: string): Promise<PublicBonus | null>;
+}
+
+const QB_BASE = 'https://www.qbreader.org/api';
+
+/**
+ * QB Reader-backed fetcher. The upstream rows carry `_id`, which the client
+ * saved at Start, so `tossup-by-id?id=<_id>` is the right lookup. Transient
+ * network errors return null and the endpoint reports a 502; the client can
+ * retry a stuck question without losing the whole sequence.
+ */
+export function qbReaderQuestionFetcher(): QuestionFetcher {
+  return {
+    async fetchTossup(id) {
+      try {
+        const res = await fetch(`${QB_BASE}/tossup-by-id?id=${encodeURIComponent(id)}`);
+        if (!res.ok) return null;
+        const body = (await res.json()) as { tossup?: Record<string, unknown> };
+        return body.tossup ? rawToPublicTossup(body.tossup) : null;
+      } catch {
+        return null;
+      }
+    },
+    async fetchBonus(id) {
+      try {
+        const res = await fetch(`${QB_BASE}/bonus-by-id?id=${encodeURIComponent(id)}`);
+        if (!res.ok) return null;
+        const body = (await res.json()) as { bonus?: Record<string, unknown> };
+        return body.bonus ? rawToPublicBonus(body.bonus) : null;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+function stripTagsSafe(html: unknown): string {
+  if (typeof html !== 'string') return '';
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function rawToPublicTossup(raw: Record<string, unknown>): PublicTossup {
+  const set = (raw.set ?? {}) as Record<string, unknown>;
+  const packet = (raw.packet ?? {}) as Record<string, unknown>;
+  const question = typeof raw.question === 'string' ? raw.question : '';
+  const answer = typeof raw.answer === 'string' ? raw.answer : '';
+  return {
+    id: String(raw._id ?? ''),
+    question,
+    question_sanitized:
+      typeof raw.question_sanitized === 'string'
+        ? raw.question_sanitized
+        : stripTagsSafe(question),
+    answer,
+    answer_sanitized:
+      typeof raw.answer_sanitized === 'string'
+        ? raw.answer_sanitized
+        : stripTagsSafe(answer),
+    category: typeof raw.category === 'string' ? raw.category : 'Other Academic',
+    subcategory:
+      typeof raw.subcategory === 'string'
+        ? raw.subcategory
+        : typeof raw.category === 'string'
+          ? raw.category
+          : 'Other Academic',
+    difficulty: typeof raw.difficulty === 'number' ? raw.difficulty : 3,
+    set_name: typeof set.name === 'string' ? set.name : 'unknown set',
+    set_year: typeof set.year === 'number' ? set.year : 0,
+    packet_number: typeof packet.number === 'number' ? packet.number : 0,
+    question_number: typeof raw.number === 'number' ? raw.number : 0,
+  };
+}
+
+function rawToPublicBonus(raw: Record<string, unknown>): PublicBonus {
+  const set = (raw.set ?? {}) as Record<string, unknown>;
+  const parts = Array.isArray(raw.parts) ? (raw.parts as string[]) : [];
+  const answers = Array.isArray(raw.answers)
+    ? (raw.answers as string[])
+    : Array.isArray(raw.answers_sanitized)
+      ? (raw.answers_sanitized as string[])
+      : [];
+  const n = Math.min(parts.length, answers.length);
+  const partsSanitized = Array.isArray(raw.parts_sanitized)
+    ? (raw.parts_sanitized as string[])
+    : parts;
+  const answersSanitized = Array.isArray(raw.answers_sanitized)
+    ? (raw.answers_sanitized as string[])
+    : answers.map(stripTagsSafe);
+  const values = Array.isArray(raw.values) ? (raw.values as number[]) : null;
+  return {
+    id: String(raw._id ?? ''),
+    leadin: typeof raw.leadin === 'string' ? raw.leadin : '',
+    leadin_sanitized:
+      typeof raw.leadin_sanitized === 'string'
+        ? raw.leadin_sanitized
+        : stripTagsSafe(raw.leadin),
+    parts: parts.slice(0, n),
+    parts_sanitized: partsSanitized.slice(0, n),
+    answers: answers.slice(0, n),
+    answers_sanitized: answersSanitized.slice(0, n),
+    values: values ? values.slice(0, n) : null,
+    category: typeof raw.category === 'string' ? raw.category : 'Other Academic',
+    subcategory:
+      typeof raw.subcategory === 'string'
+        ? raw.subcategory
+        : typeof raw.category === 'string'
+          ? raw.category
+          : 'Other Academic',
+    difficulty: typeof raw.difficulty === 'number' ? raw.difficulty : 3,
+    set_name: typeof set.name === 'string' ? set.name : 'unknown set',
+  };
+}
+
+/**
+ * Small LRU cache for resolved questions. Each Worker isolate carries its own
+ * copy; a cold start resets it, which is fine. The key is the question id
+ * plus kind to avoid collisions in the unlikely case both endpoints return a
+ * row for the same id.
+ */
+const QUESTION_CACHE_MAX = 500;
+const questionCache = new Map<string, PublicTossup | PublicBonus>();
+
+function cacheKey(kind: QuestionKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
+function cacheGet(kind: QuestionKind, id: string): PublicTossup | PublicBonus | null {
+  const key = cacheKey(kind, id);
+  const v = questionCache.get(key);
+  if (!v) return null;
+  // Touch for LRU: delete + reinsert.
+  questionCache.delete(key);
+  questionCache.set(key, v);
+  return v;
+}
+
+function cacheSet(kind: QuestionKind, id: string, v: PublicTossup | PublicBonus): void {
+  const key = cacheKey(kind, id);
+  if (questionCache.has(key)) questionCache.delete(key);
+  questionCache.set(key, v);
+  while (questionCache.size > QUESTION_CACHE_MAX) {
+    const oldest = questionCache.keys().next().value;
+    if (oldest === undefined) break;
+    questionCache.delete(oldest);
+  }
+}
+
+/** For tests. */
+export function __resetQuestionCache(): void {
+  questionCache.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -774,6 +1126,226 @@ async function handleProtest(
   return json({ id: protestId, state: 'pending' }, 200);
 }
 
+async function handleGetQuestion(
+  _request: Request,
+  authStore: AuthStore,
+  tStore: TournamentStore,
+  ctx: RequestContext,
+  fetcher: QuestionFetcher,
+  tournamentId: number,
+  seq: number,
+): Promise<Response> {
+  // Players, the creator and admins see the pinned question. Non-players get
+  // 403: the point of the pin is to keep every player on the same question,
+  // not to let anyone scrape the whole set.
+  // Unsigned-in callers are 401 so the client can distinguish "no session"
+  // from "wrong account".
+  const t = await tStore.findTournament(tournamentId);
+  if (!t) return json({ error: 'not found' }, 404);
+
+  // requireUser double-handles no-cookie callers; call it after the existence
+  // check so a bad id stays a 404 rather than leaking "would be allowed".
+  const me = await requireUser(_request, authStore, ctx.now);
+  if (!me) return json({ error: 'not signed in' }, 401);
+  if (me.role !== 'admin' && t.createdBy !== me.id) {
+    const player = await tStore.findPlayer(tournamentId, me.id);
+    if (!player) return json({ error: 'not a player in this tournament' }, 403);
+  }
+
+  const questions = await tStore.listQuestions(tournamentId);
+  const pinned = questions.find((q) => q.seq === seq);
+  if (!pinned) return json({ error: 'seq out of range' }, 404);
+
+  const cached = cacheGet(pinned.questionKind, pinned.questionId);
+  if (cached) {
+    return json({
+      seq: pinned.seq,
+      question_id: pinned.questionId,
+      question_kind: pinned.questionKind,
+      total: questions.length,
+      ...(pinned.questionKind === 'tossup'
+        ? { tossup: cached as PublicTossup }
+        : { bonus: cached as PublicBonus }),
+    });
+  }
+
+  const resolved =
+    pinned.questionKind === 'tossup'
+      ? await fetcher.fetchTossup(pinned.questionId)
+      : await fetcher.fetchBonus(pinned.questionId);
+  if (!resolved) {
+    return json(
+      { error: `upstream could not resolve ${pinned.questionKind} ${pinned.questionId}` },
+      502,
+    );
+  }
+  cacheSet(pinned.questionKind, pinned.questionId, resolved);
+  return json({
+    seq: pinned.seq,
+    question_id: pinned.questionId,
+    question_kind: pinned.questionKind,
+    total: questions.length,
+    ...(pinned.questionKind === 'tossup'
+      ? { tossup: resolved as PublicTossup }
+      : { bonus: resolved as PublicBonus }),
+  });
+}
+
+interface AttemptBody {
+  seq?: unknown;
+  question_id?: unknown;
+  given_answer?: unknown;
+  directive?: unknown;
+  points?: unknown;
+  powered?: unknown;
+  buzz_word_index?: unknown;
+  total_words?: unknown;
+  power_word_index?: unknown;
+  ms_to_answer?: unknown;
+}
+
+async function handleRecordAttempt(
+  request: Request,
+  authStore: AuthStore,
+  tStore: TournamentStore,
+  ctx: RequestContext,
+  tournamentId: number,
+): Promise<Response> {
+  const me = await requireUser(request, authStore, ctx.now);
+  if (!me) return json({ error: 'not signed in' }, 401);
+
+  const t = await tStore.findTournament(tournamentId);
+  if (!t) return json({ error: 'not found' }, 404);
+
+  const player = await tStore.findPlayer(tournamentId, me.id);
+  if (!player) return json({ error: 'only players can record attempts' }, 403);
+
+  if (!rateLimit(`attempt:${me.id}`, ctx.now, ATTEMPT_RATE_LIMIT_MAX)) {
+    return json({ error: 'too many attempts, try again later' }, 429);
+  }
+
+  const body = await readBody<AttemptBody>(request);
+  if (!body) return json({ error: 'invalid body' }, 400);
+
+  const seq = Number(body.seq);
+  if (!Number.isInteger(seq) || seq < 0) {
+    return json({ error: 'seq must be a non-negative integer' }, 400);
+  }
+  const questionId = typeof body.question_id === 'string' ? body.question_id : '';
+  if (!questionId) return json({ error: 'question_id is required' }, 400);
+  if (!isDirective(body.directive)) {
+    return json({ error: 'directive must be accept, prompt or reject' }, 400);
+  }
+  const points = Number(body.points);
+  if (!Number.isFinite(points) || !Number.isInteger(points)) {
+    return json({ error: 'points must be an integer' }, 400);
+  }
+  const totalWords = Number(body.total_words);
+  if (!Number.isInteger(totalWords) || totalWords < 0) {
+    return json({ error: 'total_words must be a non-negative integer' }, 400);
+  }
+  const buzzWordIndex =
+    body.buzz_word_index == null || body.buzz_word_index === ''
+      ? null
+      : Number(body.buzz_word_index);
+  if (buzzWordIndex !== null && (!Number.isInteger(buzzWordIndex) || buzzWordIndex < 0)) {
+    return json({ error: 'buzz_word_index must be a non-negative integer or null' }, 400);
+  }
+  const powerWordIndex =
+    body.power_word_index == null || body.power_word_index === ''
+      ? null
+      : Number(body.power_word_index);
+  if (powerWordIndex !== null && (!Number.isInteger(powerWordIndex) || powerWordIndex < 0)) {
+    return json({ error: 'power_word_index must be a non-negative integer or null' }, 400);
+  }
+  const msToAnswer =
+    body.ms_to_answer == null || body.ms_to_answer === ''
+      ? null
+      : Number(body.ms_to_answer);
+  if (msToAnswer !== null && (!Number.isFinite(msToAnswer) || msToAnswer < 0)) {
+    return json({ error: 'ms_to_answer must be a non-negative number or null' }, 400);
+  }
+  const givenAnswer =
+    typeof body.given_answer === 'string'
+      ? body.given_answer.slice(0, ATTEMPT_ANSWER_MAX)
+      : '';
+  const powered = body.powered === true || body.powered === 1 || body.powered === '1';
+
+  const id = await tStore.createAttempt({
+    tournamentId,
+    userId: me.id,
+    seq,
+    questionId,
+    givenAnswer,
+    directive: body.directive,
+    points,
+    powered,
+    buzzWordIndex,
+    totalWords,
+    powerWordIndex,
+    msToAnswer,
+    createdAt: ctx.now,
+    restitutedAt: null,
+    restitutionDelta: 0,
+  });
+
+  return json({ id, recorded_at: ctx.now }, 200);
+}
+
+export interface ScoreboardEntry {
+  user_id: number;
+  username: string;
+  team: string;
+  base_points: number;
+  restitution_delta: number;
+  points: number;
+}
+
+/** Sums attempts and restitution deltas per player. Exported for admin.ts. */
+export async function computeScoreboard(
+  authStore: AuthStore,
+  tStore: TournamentStore,
+  tournamentId: number,
+): Promise<ScoreboardEntry[]> {
+  const players = await tStore.listPlayers(tournamentId);
+  const attempts = await tStore.listAttempts(tournamentId);
+  const byUser = new Map<number, { base: number; delta: number }>();
+  for (const p of players) byUser.set(p.userId, { base: 0, delta: 0 });
+  for (const a of attempts) {
+    const bucket = byUser.get(a.userId) ?? { base: 0, delta: 0 };
+    bucket.base += a.points;
+    bucket.delta += a.restitutionDelta;
+    byUser.set(a.userId, bucket);
+  }
+  const entries: ScoreboardEntry[] = [];
+  for (const p of players) {
+    const b = byUser.get(p.userId) ?? { base: 0, delta: 0 };
+    const username = await usernameOf(authStore, p.userId);
+    entries.push({
+      user_id: p.userId,
+      username,
+      team: p.team,
+      base_points: b.base,
+      restitution_delta: b.delta,
+      points: b.base + b.delta,
+    });
+  }
+  entries.sort((a, b) => b.points - a.points);
+  return entries;
+}
+
+async function handleScoreboard(
+  _request: Request,
+  authStore: AuthStore,
+  tStore: TournamentStore,
+  tournamentId: number,
+): Promise<Response> {
+  const t = await tStore.findTournament(tournamentId);
+  if (!t) return json({ error: 'not found' }, 404);
+  const scoreboard = await computeScoreboard(authStore, tStore, tournamentId);
+  return json({ scoreboard });
+}
+
 async function handleListProtests(
   request: Request,
   authStore: AuthStore,
@@ -823,13 +1395,14 @@ function parseId(raw: string): number | null {
  * Handles an /api/tournaments[/...] request. Returns null for anything that is
  * not a tournaments path so the caller can fall through to its other routes.
  *
- * TODO(admin): /api/admin/protests/:id/resolve lands in the next task.
+ * The question fetcher is injectable so tests avoid the live QB Reader API.
  */
 export async function handleTournaments(
   request: Request,
   authStore: AuthStore,
   tStore: TournamentStore,
   ctx: RequestContext,
+  fetcher: QuestionFetcher = qbReaderQuestionFetcher(),
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -843,10 +1416,11 @@ export async function handleTournaments(
     return json({ error: 'method not allowed' }, 405);
   }
 
-  // Per-tournament endpoints: /api/tournaments/:id[/action].
+  // Per-tournament endpoints: /api/tournaments/:id[/action[/arg]].
   const rest = path.slice('/api/tournaments/'.length);
   if (rest.length === 0) return json({ error: 'not found' }, 404);
-  const [idRaw, action, ...more] = rest.split('/');
+  const parts = rest.split('/');
+  const [idRaw, action, arg, ...more] = parts;
   if (more.length > 0) return json({ error: 'not found' }, 404);
   const id = parseId(idRaw ?? '');
   if (id === null) return json({ error: 'not found' }, 404);
@@ -856,25 +1430,44 @@ export async function handleTournaments(
       return json({ error: 'method not allowed' }, 405);
     return handleGet(request, authStore, tStore, id);
   }
-  if (action === 'join') {
+  if (action === 'join' && arg === undefined) {
     if (request.method !== 'POST')
       return json({ error: 'method not allowed' }, 405);
     return handleJoin(request, authStore, tStore, ctx, id);
   }
-  if (action === 'start') {
+  if (action === 'start' && arg === undefined) {
     if (request.method !== 'POST')
       return json({ error: 'method not allowed' }, 405);
     return handleStart(request, authStore, tStore, ctx, id);
   }
-  if (action === 'protest') {
+  if (action === 'protest' && arg === undefined) {
     if (request.method !== 'POST')
       return json({ error: 'method not allowed' }, 405);
     return handleProtest(request, authStore, tStore, ctx, id);
   }
-  if (action === 'protests') {
+  if (action === 'protests' && arg === undefined) {
     if (request.method !== 'GET')
       return json({ error: 'method not allowed' }, 405);
     return handleListProtests(request, authStore, tStore, ctx, id);
+  }
+  if (action === 'attempts' && arg === undefined) {
+    if (request.method !== 'POST')
+      return json({ error: 'method not allowed' }, 405);
+    return handleRecordAttempt(request, authStore, tStore, ctx, id);
+  }
+  if (action === 'scoreboard' && arg === undefined) {
+    if (request.method !== 'GET')
+      return json({ error: 'method not allowed' }, 405);
+    return handleScoreboard(request, authStore, tStore, id);
+  }
+  if (action === 'questions' && arg !== undefined) {
+    if (request.method !== 'GET')
+      return json({ error: 'method not allowed' }, 405);
+    const seq = Number(arg);
+    if (!Number.isInteger(seq) || seq < 0) {
+      return json({ error: 'seq must be a non-negative integer' }, 400);
+    }
+    return handleGetQuestion(request, authStore, tStore, ctx, fetcher, id, seq);
   }
   return json({ error: 'not found' }, 404);
 }

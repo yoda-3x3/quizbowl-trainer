@@ -16,6 +16,9 @@
  *   POST /api/tournaments/:id/start      -> creator sets the question sequence
  *   POST /api/tournaments/:id/protest    -> file a protest on a resolved question
  *   GET  /api/tournaments/:id/protests   -> caller's protests (admin: all)
+ *   GET  /api/tournaments/:id/questions/:seq -> next pinned question, resolved
+ *   POST /api/tournaments/:id/attempts   -> persist a resolved question's outcome
+ *   GET  /api/tournaments/:id/scoreboard -> live totals per player, with deltas
  *   GET  /api/admin/users                -> paginated user list (admin-only)
  *   POST /api/admin/users/:id/role       -> change a user's role (admin-only)
  *   POST /api/admin/users/:id/ban        -> ban + invalidate sessions (admin-only)

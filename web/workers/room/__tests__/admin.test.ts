@@ -19,6 +19,7 @@ import {
 import { parseSessionCookie } from '../session';
 import {
   handleTournaments,
+  type AttemptRow,
   type ProtestRow,
   type ProtestState,
   type TournamentPlayerRow,
@@ -87,10 +88,12 @@ class MemoryAuthStore implements AuthStore {
 class MemoryTournamentStore implements TournamentStore {
   private nextId = 1;
   private nextProtestId = 1;
+  private nextAttemptId = 1;
   public tournaments = new Map<number, TournamentRow>();
   public players: TournamentPlayerRow[] = [];
   public questions: TournamentQuestionRow[] = [];
   public protests: ProtestRow[] = [];
+  public attempts: AttemptRow[] = [];
 
   async createTournament(t: Omit<TournamentRow, 'id'>): Promise<number> {
     const id = this.nextId++;
@@ -162,6 +165,46 @@ class MemoryTournamentStore implements TournamentStore {
       .filter((p) => p.tournamentId === tournamentId)
       .sort((a, b) => b.createdAt - a.createdAt)
       .map((p) => ({ ...p }));
+  }
+
+  async createAttempt(a: Omit<AttemptRow, 'id'>): Promise<number> {
+    const id = this.nextAttemptId++;
+    this.attempts.push({ ...a, id });
+    return id;
+  }
+
+  async listAttempts(tournamentId: number): Promise<AttemptRow[]> {
+    return this.attempts
+      .filter((a) => a.tournamentId === tournamentId)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((a) => ({ ...a }));
+  }
+
+  async findAttemptForProtest(
+    tournamentId: number,
+    userId: number,
+    questionId: string,
+  ): Promise<AttemptRow | null> {
+    const matches = this.attempts.filter(
+      (a) =>
+        a.tournamentId === tournamentId &&
+        a.userId === userId &&
+        (a.questionId === questionId || a.questionId.startsWith(`${questionId}#`)),
+    );
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => b.createdAt - a.createdAt);
+    return matches[0] ? { ...matches[0] } : null;
+  }
+
+  async applyAttemptRestitution(
+    attemptId: number,
+    delta: number,
+    restitutedAt: number,
+  ): Promise<void> {
+    const a = this.attempts.find((x) => x.id === attemptId);
+    if (!a) return;
+    a.restitutionDelta = delta;
+    a.restitutedAt = restitutedAt;
   }
 }
 
@@ -1009,5 +1052,475 @@ describe('POST /api/admin/protests/:id/resolve', () => {
     );
     const body = (await (res as Response).json()) as { protests: unknown[] };
     expect(body.protests).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Protest restitution
+// ---------------------------------------------------------------------------
+
+/**
+ * Seeds a started tournament, has bob record a tossup attempt that was ruled
+ * incorrect (reject, -5), then has bob file a protest on it. Returns the
+ * tournament, the attempt and the protest. The protest is still pending.
+ */
+async function withNeggedAttemptAndProtest(): Promise<
+  Seeded & { tournamentId: number; protestId: number; attemptId: number }
+> {
+  const seeded = await seed();
+  await handleTournaments(
+    req(
+      'POST',
+      '/api/tournaments',
+      { name: 'Delta', format: 'tossups', n_tossups: 1 },
+      seeded.aliceCookie,
+    ),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  await handleTournaments(
+    req('POST', '/api/tournaments/1/join', { team: 'Blue' }, seeded.bobCookie),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  await handleTournaments(
+    req(
+      'POST',
+      '/api/tournaments/1/start',
+      { questions: [{ seq: 0, question_id: 'q0', question_kind: 'tossup' }] },
+      seeded.aliceCookie,
+    ),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  const attemptRes = await handleTournaments(
+    req(
+      'POST',
+      '/api/tournaments/1/attempts',
+      {
+        seq: 0,
+        question_id: 'q0',
+        given_answer: 'dickens',
+        directive: 'reject',
+        points: -5,
+        powered: false,
+        buzz_word_index: 12,
+        total_words: 40,
+        power_word_index: 7,
+        ms_to_answer: 1500,
+      },
+      seeded.bobCookie,
+    ),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  const { id: attemptId } = (await (attemptRes as Response).json()) as {
+    id: number;
+  };
+  const protestRes = await handleTournaments(
+    req(
+      'POST',
+      '/api/tournaments/1/protest',
+      {
+        question_id: 'q0',
+        reason: 'my answer was in fact equivalent to the expected one',
+        given_answer: 'dickens',
+      },
+      seeded.bobCookie,
+    ),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  const { id: protestId } = (await (protestRes as Response).json()) as {
+    id: number;
+  };
+  return { ...seeded, tournamentId: 1, protestId, attemptId };
+}
+
+describe('POST /api/admin/protests/:id/resolve — restitution', () => {
+  it('accepted protest on a negged tossup restitutes to the "correct" points', async () => {
+    // Buzz was before the (*) power mark (powerWordIndex=7, buzzWordIndex=12).
+    // Actually buzz=12 > power=7 so this is a non-powered correct buzz: +10.
+    // From -5 to +10 → delta +15.
+    const { authStore, tStore, admin, aliceCookie, protestId, attemptId } =
+      await withNeggedAttemptAndProtest();
+    const res = await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'accepted' },
+        aliceCookie,
+      ),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      protest: { state: string; restitution_delta: number | null };
+    };
+    expect(body.protest.state).toBe('accepted');
+    expect(body.protest.restitution_delta).toBe(15);
+
+    const attempts = await tStore.listAttempts(1);
+    const bobAttempt = attempts.find((a) => a.id === attemptId);
+    expect(bobAttempt?.restitutionDelta).toBe(15);
+    expect(bobAttempt?.restitutedAt).not.toBeNull();
+  });
+
+  it('powered buzz on a negged tossup restitutes to +15 from -5 (delta +20)', async () => {
+    const seeded = await seed();
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments',
+        { name: 'Power Delta', format: 'tossups', n_tossups: 1 },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req('POST', '/api/tournaments/1/join', { team: 'Blue' }, seeded.bobCookie),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/start',
+        { questions: [{ seq: 0, question_id: 'qp', question_kind: 'tossup' }] },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    // Buzz is at word 3, power ends at word 7, so a correct buzz would power.
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        {
+          seq: 0,
+          question_id: 'qp',
+          given_answer: 'dickens',
+          directive: 'reject',
+          points: -5,
+          powered: false,
+          buzz_word_index: 3,
+          total_words: 40,
+          power_word_index: 7,
+          ms_to_answer: 900,
+        },
+        seeded.bobCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    const protestRes = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/protest',
+        {
+          question_id: 'qp',
+          reason: 'equivalent answer rejected unfairly in a powered buzz',
+          given_answer: 'dickens',
+        },
+        seeded.bobCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    const { id: protestId } = (await (protestRes as Response).json()) as {
+      id: number;
+    };
+
+    const res = await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'accepted' },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      new MemoryAdminStore(seeded.authStore, seeded.tStore),
+      seeded.tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      protest: { restitution_delta: number };
+    };
+    expect(body.protest.restitution_delta).toBe(20);
+  });
+
+  it('rejected protest writes no restitution', async () => {
+    const { authStore, tStore, admin, aliceCookie, protestId, attemptId } =
+      await withNeggedAttemptAndProtest();
+    const res = await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'rejected' },
+        aliceCookie,
+      ),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      protest: { restitution_delta: number | null };
+    };
+    expect(body.protest.restitution_delta).toBe(null);
+
+    const attempts = await tStore.listAttempts(1);
+    const bobAttempt = attempts.find((a) => a.id === attemptId);
+    expect(bobAttempt?.restitutionDelta).toBe(0);
+    expect(bobAttempt?.restitutedAt).toBe(null);
+  });
+
+  it('accepted protest with no matching attempt still succeeds but writes no delta', async () => {
+    // Set up a tournament where bob files a protest without ever recording an
+    // attempt — a client that crashed mid-question.
+    const seeded = await seed();
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments',
+        { name: 'Empty', format: 'tossups', n_tossups: 1 },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req('POST', '/api/tournaments/1/join', { team: 'Blue' }, seeded.bobCookie),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/start',
+        { questions: [{ seq: 0, question_id: 'q0', question_kind: 'tossup' }] },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    const protestRes = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/protest',
+        {
+          question_id: 'q0',
+          reason: 'client crashed and never recorded, but I want this reviewed',
+        },
+        seeded.bobCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    const { id: protestId } = (await (protestRes as Response).json()) as {
+      id: number;
+    };
+    const admin = new MemoryAdminStore(seeded.authStore, seeded.tStore);
+    const res = await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'accepted' },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      admin,
+      seeded.tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      protest: { restitution_delta: number | null };
+    };
+    expect(body.protest.restitution_delta).toBe(null);
+  });
+
+  it('accepted protest on a missed bonus part restitutes to the part value', async () => {
+    const seeded = await seed();
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments',
+        {
+          name: 'Bonus',
+          format: 'tossups_bonuses',
+          n_tossups: 1,
+          n_bonuses: 1,
+        },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req('POST', '/api/tournaments/1/join', { team: 'Blue' }, seeded.bobCookie),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/start',
+        {
+          questions: [
+            { seq: 0, question_id: 't0', question_kind: 'tossup' },
+            { seq: 1, question_id: 'b0', question_kind: 'bonus' },
+          ],
+        },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    // Bonus part 0 got 0 points; the correct value is 10.
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        {
+          seq: 1,
+          question_id: 'b0#0',
+          given_answer: 'dickens',
+          directive: 'reject',
+          points: 0,
+          powered: false,
+          buzz_word_index: null,
+          total_words: 8,
+          power_word_index: null,
+          ms_to_answer: null,
+        },
+        seeded.bobCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    const protestRes = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/protest',
+        {
+          question_id: 'b0',
+          reason: 'bonus part 0 answer was equivalent and should have scored',
+          given_answer: 'dickens',
+        },
+        seeded.bobCookie,
+      ),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    const { id: protestId } = (await (protestRes as Response).json()) as {
+      id: number;
+    };
+    const admin = new MemoryAdminStore(seeded.authStore, seeded.tStore);
+    const res = await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'accepted' },
+        seeded.aliceCookie,
+      ),
+      seeded.authStore,
+      admin,
+      seeded.tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      protest: { restitution_delta: number };
+    };
+    expect(body.protest.restitution_delta).toBe(10);
+  });
+
+  it('surfaces the accepted delta in the list view', async () => {
+    const { authStore, tStore, admin, aliceCookie, protestId } =
+      await withNeggedAttemptAndProtest();
+    await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'accepted' },
+        aliceCookie,
+      ),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    const res = await handleAdmin(
+      req('GET', '/api/admin/protests?state=accepted', undefined, aliceCookie),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      protests: Array<{ id: number; restitution_delta: number | null }>;
+    };
+    expect(body.protests[0]?.restitution_delta).toBe(15);
+  });
+
+  it('scoreboard reflects the restitution after acceptance', async () => {
+    const { authStore, tStore, admin, aliceCookie, protestId } =
+      await withNeggedAttemptAndProtest();
+    await handleAdmin(
+      req(
+        'POST',
+        `/api/admin/protests/${protestId}/resolve`,
+        { decision: 'accepted' },
+        aliceCookie,
+      ),
+      authStore,
+      admin,
+      tStore,
+      ctx(),
+    );
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/scoreboard'),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      scoreboard: Array<{
+        username: string;
+        points: number;
+        base_points: number;
+        restitution_delta: number;
+      }>;
+    };
+    const bob = body.scoreboard.find((e) => e.username === 'bob');
+    expect(bob?.base_points).toBe(-5);
+    expect(bob?.restitution_delta).toBe(15);
+    expect(bob?.points).toBe(10);
   });
 });

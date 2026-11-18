@@ -18,8 +18,13 @@ import {
 import { parseSessionCookie } from '../session';
 import {
   PROTEST_RATE_LIMIT_MAX,
+  __resetQuestionCache,
   handleTournaments,
+  type AttemptRow,
   type ProtestRow,
+  type PublicBonus,
+  type PublicTossup,
+  type QuestionFetcher,
   type TournamentPlayerRow,
   type TournamentQuestionRow,
   type TournamentRow,
@@ -75,10 +80,12 @@ class MemoryAuthStore implements AuthStore {
 class MemoryTournamentStore implements TournamentStore {
   private nextId = 1;
   private nextProtestId = 1;
+  private nextAttemptId = 1;
   public tournaments = new Map<number, TournamentRow>();
   public players: TournamentPlayerRow[] = [];
   public questions: TournamentQuestionRow[] = [];
   public protests: ProtestRow[] = [];
+  public attempts: AttemptRow[] = [];
 
   async createTournament(t: Omit<TournamentRow, 'id'>): Promise<number> {
     const id = this.nextId++;
@@ -163,6 +170,63 @@ class MemoryTournamentStore implements TournamentStore {
       .filter((p) => p.tournamentId === tournamentId)
       .sort((a, b) => b.createdAt - a.createdAt)
       .map((p) => ({ ...p }));
+  }
+
+  async createAttempt(a: Omit<AttemptRow, 'id'>): Promise<number> {
+    const id = this.nextAttemptId++;
+    this.attempts.push({ ...a, id });
+    return id;
+  }
+
+  async listAttempts(tournamentId: number): Promise<AttemptRow[]> {
+    return this.attempts
+      .filter((a) => a.tournamentId === tournamentId)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map((a) => ({ ...a }));
+  }
+
+  async findAttemptForProtest(
+    tournamentId: number,
+    userId: number,
+    questionId: string,
+  ): Promise<AttemptRow | null> {
+    const matches = this.attempts.filter(
+      (a) =>
+        a.tournamentId === tournamentId &&
+        a.userId === userId &&
+        (a.questionId === questionId || a.questionId.startsWith(`${questionId}#`)),
+    );
+    if (matches.length === 0) return null;
+    matches.sort((a, b) => b.createdAt - a.createdAt);
+    return matches[0] ? { ...matches[0] } : null;
+  }
+
+  async applyAttemptRestitution(
+    attemptId: number,
+    delta: number,
+    restitutedAt: number,
+  ): Promise<void> {
+    const a = this.attempts.find((x) => x.id === attemptId);
+    if (!a) return;
+    a.restitutionDelta = delta;
+    a.restitutedAt = restitutedAt;
+  }
+}
+
+class FakeQuestionFetcher implements QuestionFetcher {
+  public tossups = new Map<string, PublicTossup>();
+  public bonuses = new Map<string, PublicBonus>();
+  public tossupHits = 0;
+  public bonusHits = 0;
+
+  async fetchTossup(id: string): Promise<PublicTossup | null> {
+    this.tossupHits += 1;
+    return this.tossups.get(id) ?? null;
+  }
+
+  async fetchBonus(id: string): Promise<PublicBonus | null> {
+    this.bonusHits += 1;
+    return this.bonuses.get(id) ?? null;
   }
 }
 
@@ -972,5 +1036,515 @@ describe('GET /api/tournaments/:id/protests', () => {
       protests: Array<{ raised_by: number }>;
     };
     expect(body.protests.map((p) => p.raised_by).sort()).toEqual([1, 2]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/tournaments/:id/questions/:seq
+// ---------------------------------------------------------------------------
+
+function makeTossup(id: string, overrides: Partial<PublicTossup> = {}): PublicTossup {
+  return {
+    id,
+    question: 'Who wrote?',
+    question_sanitized: 'Who wrote?',
+    answer: '<b><u>Dickens</u></b>',
+    answer_sanitized: 'Dickens',
+    category: 'Literature',
+    subcategory: 'British Literature',
+    difficulty: 4,
+    set_name: 'Test Set',
+    set_year: 2024,
+    packet_number: 1,
+    question_number: 1,
+    ...overrides,
+  };
+}
+
+function makeBonus(id: string, overrides: Partial<PublicBonus> = {}): PublicBonus {
+  return {
+    id,
+    leadin: 'For 10 points each:',
+    leadin_sanitized: 'For 10 points each:',
+    parts: ['Who wrote Hard Times?', 'Who wrote Bleak House?'],
+    parts_sanitized: ['Who wrote Hard Times?', 'Who wrote Bleak House?'],
+    answers: ['Dickens', 'Dickens'],
+    answers_sanitized: ['Dickens', 'Dickens'],
+    values: [10, 10],
+    category: 'Literature',
+    subcategory: 'British Literature',
+    difficulty: 4,
+    set_name: 'Test Set',
+    ...overrides,
+  };
+}
+
+async function startedTournamentWith(
+  format: 'tossups' | 'tossups_bonuses' = 'tossups',
+  questions: Array<{ question_id: string; question_kind: 'tossup' | 'bonus' }> = [
+    { question_id: 'q0', question_kind: 'tossup' },
+    { question_id: 'q1', question_kind: 'tossup' },
+  ],
+): Promise<Seeded & { tournamentId: number }> {
+  const seeded = await seed();
+  const nTossups = questions.filter((q) => q.question_kind === 'tossup').length;
+  const nBonuses = questions.filter((q) => q.question_kind === 'bonus').length;
+  await handleTournaments(
+    req(
+      'POST',
+      '/api/tournaments',
+      { name: 'Scoreboard Match', format, n_tossups: nTossups, n_bonuses: nBonuses },
+      seeded.aliceCookie,
+    ),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  await handleTournaments(
+    req('POST', '/api/tournaments/1/join', { team: 'Blue' }, seeded.bobCookie),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  await handleTournaments(
+    req(
+      'POST',
+      '/api/tournaments/1/start',
+      { questions: questions.map((q, i) => ({ seq: i, ...q })) },
+      seeded.aliceCookie,
+    ),
+    seeded.authStore,
+    seeded.tStore,
+    ctx(),
+  );
+  return { ...seeded, tournamentId: 1 };
+}
+
+describe('GET /api/tournaments/:id/questions/:seq', () => {
+  afterEach(() => {
+    __resetQuestionCache();
+  });
+
+  it('401s an anonymous caller', async () => {
+    const { authStore, tStore } = await startedTournamentWith();
+    const fetcher = new FakeQuestionFetcher();
+    fetcher.tossups.set('q0', makeTossup('q0'));
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/0'),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(401);
+  });
+
+  it('403s a signed-in non-player', async () => {
+    const seeded = await startedTournamentWith();
+    // carol is signed in (first seeded user after alice/bob/<admin flag>)
+    const authRes = await handleAuth(
+      req('POST', '/api/auth/signup', { username: 'carol', password: 'password1' }),
+      seeded.authStore,
+      ctx(),
+    );
+    const carolCookie = `session=${sessionCookieOf(authRes as Response) ?? ''}`;
+    const fetcher = new FakeQuestionFetcher();
+    fetcher.tossups.set('q0', makeTossup('q0'));
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/0', undefined, carolCookie),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(403);
+  });
+
+  it('404s a missing tournament', async () => {
+    const { authStore, tStore, aliceCookie } = await seed();
+    const fetcher = new FakeQuestionFetcher();
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/99/questions/0', undefined, aliceCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(404);
+  });
+
+  it('404s an out-of-range seq', async () => {
+    const { authStore, tStore, aliceCookie } = await startedTournamentWith();
+    const fetcher = new FakeQuestionFetcher();
+    fetcher.tossups.set('q0', makeTossup('q0'));
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/99', undefined, aliceCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(404);
+  });
+
+  it('returns the pinned tossup for a player', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const fetcher = new FakeQuestionFetcher();
+    fetcher.tossups.set('q0', makeTossup('q0'));
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/0', undefined, bobCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      seq: number;
+      question_id: string;
+      question_kind: string;
+      total: number;
+      tossup: PublicTossup;
+    };
+    expect(body.seq).toBe(0);
+    expect(body.question_id).toBe('q0');
+    expect(body.question_kind).toBe('tossup');
+    expect(body.total).toBe(2);
+    expect(body.tossup.id).toBe('q0');
+  });
+
+  it('returns the pinned bonus when the kind is bonus', async () => {
+    const { authStore, tStore, aliceCookie } = await startedTournamentWith(
+      'tossups_bonuses',
+      [
+        { question_id: 't0', question_kind: 'tossup' },
+        { question_id: 'b0', question_kind: 'bonus' },
+      ],
+    );
+    const fetcher = new FakeQuestionFetcher();
+    fetcher.bonuses.set('b0', makeBonus('b0'));
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/1', undefined, aliceCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      question_kind: string;
+      bonus: PublicBonus;
+    };
+    expect(body.question_kind).toBe('bonus');
+    expect(body.bonus.id).toBe('b0');
+  });
+
+  it('caches a resolved question across calls', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const fetcher = new FakeQuestionFetcher();
+    fetcher.tossups.set('q0', makeTossup('q0'));
+
+    await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/0', undefined, bobCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/0', undefined, bobCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(fetcher.tossupHits).toBe(1);
+  });
+
+  it('returns 502 when the upstream has nothing', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const fetcher = new FakeQuestionFetcher();
+    // No entries added.
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/0', undefined, bobCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(502);
+  });
+
+  it('400s a non-integer seq', async () => {
+    const { authStore, tStore, aliceCookie } = await startedTournamentWith();
+    const fetcher = new FakeQuestionFetcher();
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/questions/abc', undefined, aliceCookie),
+      authStore,
+      tStore,
+      ctx(),
+      fetcher,
+    );
+    expect(res?.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/tournaments/:id/attempts
+// ---------------------------------------------------------------------------
+
+function sampleAttemptBody(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    seq: 0,
+    question_id: 'q0',
+    given_answer: 'dickens',
+    directive: 'accept',
+    points: 10,
+    powered: false,
+    buzz_word_index: 12,
+    total_words: 40,
+    power_word_index: 7,
+    ms_to_answer: 1500,
+    ...overrides,
+  };
+}
+
+describe('POST /api/tournaments/:id/attempts', () => {
+  it('401s an anonymous caller', async () => {
+    const { authStore, tStore } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req('POST', '/api/tournaments/1/attempts', sampleAttemptBody()),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(401);
+  });
+
+  it('403s a signed-in non-player', async () => {
+    const seeded = await startedTournamentWith();
+    const authRes = await handleAuth(
+      req('POST', '/api/auth/signup', { username: 'carol', password: 'password1' }),
+      seeded.authStore,
+      ctx(),
+    );
+    const carolCookie = `session=${sessionCookieOf(authRes as Response) ?? ''}`;
+    const res = await handleTournaments(
+      req('POST', '/api/tournaments/1/attempts', sampleAttemptBody(), carolCookie),
+      seeded.authStore,
+      seeded.tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(403);
+  });
+
+  it('404s a missing tournament', async () => {
+    const { authStore, tStore, aliceCookie } = await seed();
+    const res = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/99/attempts',
+        sampleAttemptBody(),
+        aliceCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(404);
+  });
+
+  it('persists a valid attempt and returns its id', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody(),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as { id: number };
+    expect(body.id).toBeGreaterThan(0);
+    const rows = await tStore.listAttempts(1);
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.questionId).toBe('q0');
+    expect(rows[0]?.directive).toBe('accept');
+    expect(rows[0]?.points).toBe(10);
+  });
+
+  it('400s when directive is invalid', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ directive: 'unknown' }),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(400);
+  });
+
+  it('400s when question_id is missing', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ question_id: '' }),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(400);
+  });
+
+  it('400s a negative seq', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ seq: -1 }),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(400);
+  });
+
+  it('accepts a null buzz_word_index (no-buzz end-of-question)', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ buzz_word_index: null, powered: false, points: 10 }),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const rows = await tStore.listAttempts(1);
+    expect(rows[0]?.buzzWordIndex).toBe(null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/tournaments/:id/scoreboard
+// ---------------------------------------------------------------------------
+
+describe('GET /api/tournaments/:id/scoreboard', () => {
+  it('shows every player with zero points when no attempts have landed', async () => {
+    const { authStore, tStore } = await startedTournamentWith();
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/scoreboard'),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(200);
+    const body = (await (res as Response).json()) as {
+      scoreboard: Array<{
+        user_id: number;
+        username: string;
+        points: number;
+        base_points: number;
+        restitution_delta: number;
+      }>;
+    };
+    expect(body.scoreboard.length).toBe(2);
+    expect(body.scoreboard.every((e) => e.points === 0)).toBe(true);
+    expect(body.scoreboard.map((e) => e.username).sort()).toEqual(['alice', 'bob']);
+  });
+
+  it('sums an attempt into the player total', async () => {
+    const { authStore, tStore, bobCookie } = await startedTournamentWith();
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ points: 15, powered: true }),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/scoreboard'),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      scoreboard: Array<{ username: string; points: number; base_points: number }>;
+    };
+    const bob = body.scoreboard.find((e) => e.username === 'bob');
+    expect(bob?.points).toBe(15);
+    expect(bob?.base_points).toBe(15);
+  });
+
+  it('sorts entries from highest points to lowest', async () => {
+    const { authStore, tStore, aliceCookie, bobCookie } = await startedTournamentWith();
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ points: 10 }),
+        aliceCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    await handleTournaments(
+      req(
+        'POST',
+        '/api/tournaments/1/attempts',
+        sampleAttemptBody({ points: 15, powered: true, seq: 1, question_id: 'q1' }),
+        bobCookie,
+      ),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/1/scoreboard'),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    const body = (await (res as Response).json()) as {
+      scoreboard: Array<{ username: string; points: number }>;
+    };
+    expect(body.scoreboard.map((e) => e.username)).toEqual(['bob', 'alice']);
+  });
+
+  it('404s a missing tournament', async () => {
+    const { authStore, tStore } = await seed();
+    const res = await handleTournaments(
+      req('GET', '/api/tournaments/99/scoreboard'),
+      authStore,
+      tStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(404);
   });
 });

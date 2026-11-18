@@ -37,10 +37,14 @@ import {
   type StoredUser,
 } from './auth';
 import type {
+  AttemptRow,
   ProtestRow,
   ProtestState,
   TournamentStore,
 } from './tournaments';
+// Pyramidal scoring is shared with the client; see the comment in
+// tournaments.ts about crossing the src/workers boundary intentionally.
+import { scoreTossup, scoreBonusPart } from '../../src/engine/scoring';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -68,6 +72,13 @@ export interface AdminProtestView {
   resolved_by: number | null;
   resolved_at: number | null;
   resolved_note: string | null;
+  /**
+   * Set once a decision is written. For an accepted protest it is the points
+   * the player was awarded minus the points they originally scored; for a
+   * rejected protest or a pending one it is null. Surfaced on the admin
+   * protests tab so the admin can see the effect of their decision.
+   */
+  restitution_delta: number | null;
 }
 
 /**
@@ -508,6 +519,23 @@ async function handleRemovePacket(
 // Protests
 // ---------------------------------------------------------------------------
 
+async function deltaForProtest(
+  tStore: TournamentStore,
+  p: ProtestRow,
+): Promise<number | null> {
+  if (p.state !== 'accepted') return null;
+  const attempt = await tStore.findAttemptForProtest(
+    p.tournamentId,
+    p.raisedBy,
+    p.questionId,
+  );
+  if (!attempt) return null;
+  // The attempt already carries the delta that was written at resolve time;
+  // return that directly rather than recomputing, so a later change in the
+  // scoring rules does not retroactively rewrite accepted history.
+  return attempt.restitutionDelta;
+}
+
 async function handleListProtests(
   request: Request,
   authStore: AuthStore,
@@ -528,6 +556,7 @@ async function handleListProtests(
   for (const p of rows) {
     const tournament = await tStore.findTournament(p.tournamentId);
     const raiser = await authStore.findUserById(p.raisedBy);
+    const delta = await deltaForProtest(tStore, p);
     views.push({
       id: p.id,
       tournament_id: p.tournamentId,
@@ -542,9 +571,35 @@ async function handleListProtests(
       resolved_by: p.resolvedBy,
       resolved_at: p.resolvedAt,
       resolved_note: p.resolvedNote,
+      restitution_delta: delta,
     });
   }
   return json({ protests: views });
+}
+
+/**
+ * Computes the points the player should have had if the protest had been
+ * ruled correct from the start. Uses `scoreTossup` for a tossup attempt and
+ * `scoreBonusPart` for a bonus part — both are the owned engine functions,
+ * imported from src/engine/scoring.ts, so client-side scoring and server-side
+ * restitution never drift.
+ */
+function restitutedPointsFor(attempt: AttemptRow): number {
+  if (attempt.questionId.includes('#')) {
+    // Bonus part: a flat value stored by the client as `points` for a correct
+    // answer. We don't have the per-part `value` on the server, so infer it
+    // from the stored row: a correct attempt has points>0; an incorrect one
+    // has 0. The value is the max of (recorded points, 10) — 10 is the
+    // default-part value in src/engine/scoring.ts and in src/screens/Bonus.tsx.
+    const inferredValue = Math.max(attempt.points, 10);
+    return scoreBonusPart(true, inferredValue);
+  }
+  const outcome = scoreTossup({
+    buzzWordIndex: attempt.buzzWordIndex,
+    powerIndex: attempt.powerWordIndex,
+    correct: true,
+  });
+  return outcome.points;
 }
 
 interface ResolveBody {
@@ -556,6 +611,7 @@ async function handleResolveProtest(
   request: Request,
   authStore: AuthStore,
   admin: AdminStore,
+  tStore: TournamentStore,
   ctx: RequestContext,
   protestId: number,
 ): Promise<Response> {
@@ -590,6 +646,28 @@ async function handleResolveProtest(
     note,
   );
 
+  // If the admin accepted the protest, write the restitution onto the matching
+  // attempt row so the scoreboard reflects the ruling. If the player answered
+  // correctly already (points > 0) and the admin still accepts, the delta is
+  // 0 and the row is marked restituted for provenance.
+  let restitutionDelta: number | null = null;
+  if (body.decision === 'accepted') {
+    const attempt = await tStore.findAttemptForProtest(
+      existing.tournamentId,
+      existing.raisedBy,
+      existing.questionId,
+    );
+    if (attempt) {
+      const target = restitutedPointsFor(attempt);
+      restitutionDelta = target - attempt.points;
+      await tStore.applyAttemptRestitution(
+        attempt.id,
+        restitutionDelta,
+        ctx.now,
+      );
+    }
+  }
+
   const fresh = await admin.findProtest(protestId);
   if (!fresh) return json({ error: 'protest not found' }, 404);
   return json({
@@ -605,6 +683,7 @@ async function handleResolveProtest(
       resolved_by: fresh.resolvedBy,
       resolved_at: fresh.resolvedAt,
       resolved_note: fresh.resolvedNote,
+      restitution_delta: restitutionDelta,
     },
   });
 }
@@ -695,7 +774,7 @@ export async function handleAdmin(
       return json({ error: 'method not allowed' }, 405);
     const id = parseId(protestAction[1] ?? '');
     if (id === null) return json({ error: 'not found' }, 404);
-    return handleResolveProtest(request, authStore, admin, ctx, id);
+    return handleResolveProtest(request, authStore, admin, tStore, ctx, id);
   }
 
   return json({ error: 'not found' }, 404);
