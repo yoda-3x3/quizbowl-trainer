@@ -39,6 +39,7 @@ import { makeRoomCode } from './protocol';
 import { d1Store, handleAuth, type RequestContext } from './auth';
 import { d1TournamentStore, handleTournaments } from './tournaments';
 import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
+import { d1PacketStore, handlePackets } from './packets';
 
 export { Room };
 
@@ -112,12 +113,28 @@ export default {
       const authStore = d1Store(env.DB);
       const tStore = d1TournamentStore(env.DB);
       const adminStore = d1AdminStore(env.DB);
+      const packetStore = d1PacketStore(env.DB);
       const response = await handleAdmin(
         request,
         authStore,
         adminStore,
         tStore,
+        packetStore,
         roomCloserFor(env),
+        contextFrom(request),
+      );
+      if (response) return response;
+    }
+
+    // Shared packet storage. Any signed-in user can list/upload/fetch; delete
+    // is gated to the uploader or an admin inside the handler.
+    if (url.pathname.startsWith('/api/packets')) {
+      const authStore = d1Store(env.DB);
+      const packetStore = d1PacketStore(env.DB);
+      const response = await handlePackets(
+        request,
+        authStore,
+        packetStore,
         contextFrom(request),
       );
       if (response) return response;

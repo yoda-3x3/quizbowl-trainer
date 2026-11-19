@@ -22,11 +22,10 @@
  *
  * Packets note
  * ------------
- * Packet import is client-side only today — the importer parses in-browser and
- * hands results to the host's session (see NOTES.md, "Card C"). Nothing is
- * persisted server-side, so the admin packet routes are honest stubs: list
- * returns an empty collection with a note, and remove is a 404 that says the
- * same thing. See web/NOTES.md for the follow-up.
+ * Packets are now persisted server-side; see `packets.ts`. The admin list and
+ * remove endpoints share the same `PacketStore` the user-facing `/api/packets`
+ * routes use. The caller passes the store in; the admin dispatcher never
+ * reaches for D1 itself.
  */
 
 import {
@@ -42,6 +41,12 @@ import type {
   ProtestState,
   TournamentStore,
 } from './tournaments';
+import {
+  listAdminPackets as listPacketsFromStore,
+  removeAdminPacket as removePacketFromStore,
+  type PacketListEntry,
+  type PacketStore,
+} from './packets';
 // Pyramidal scoring is shared with the client; see the comment in
 // tournaments.ts about crossing the src/workers boundary intentionally.
 import { scoreTossup, scoreBonusPart } from '../../src/engine/scoring';
@@ -598,30 +603,30 @@ async function handleCloseRoom(
 async function handleListPackets(
   request: Request,
   authStore: AuthStore,
+  packets: PacketStore,
   ctx: RequestContext,
 ): Promise<Response> {
   const me = await requireAdmin(request, authStore, ctx);
   if (me instanceof Response) return me;
-  return json({
-    packets: [],
-    note: 'packet import is client-side; nothing to manage server-side yet',
-  });
+  const entries: PacketListEntry[] = await listPacketsFromStore(
+    packets,
+    authStore,
+  );
+  return json({ packets: entries });
 }
 
 async function handleRemovePacket(
   request: Request,
   authStore: AuthStore,
+  packets: PacketStore,
   ctx: RequestContext,
+  id: string,
 ): Promise<Response> {
   const me = await requireAdmin(request, authStore, ctx);
   if (me instanceof Response) return me;
-  return json(
-    {
-      error:
-        'packets are not persisted server-side; nothing to remove',
-    },
-    404,
-  );
+  const removed = await removePacketFromStore(packets, id);
+  if (!removed) return json({ error: 'packet not found' }, 404);
+  return json({ ok: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -815,10 +820,27 @@ function parseId(raw: string): number | null {
  * (for example in tests that never exercise the close path). */
 const NOOP_ROOM_CLOSER: RoomCloser = { async close() {} };
 
+/** Empty `PacketStore` used by test callers that never touch the packet
+ * routes. A test that does exercise them passes a real memory store instead. */
+const EMPTY_PACKET_STORE: PacketStore = {
+  async insert() {},
+  async list() {
+    return [];
+  },
+  async find() {
+    return null;
+  },
+  async delete() {
+    return false;
+  },
+};
+
 /**
- * Handles an /api/admin/* request. Two overloads: the 5-arg form (no room
- * closer) is intended for tests that never exercise the close path; the
- * 6-arg form is what the production worker in `index.ts` uses.
+ * Handles an /api/admin/* request. The production worker in `index.ts` passes
+ * every store plus a `RoomCloser` and a `RequestContext`. For tests the
+ * trailing `rooms` and `packets` can be omitted individually or together: the
+ * overloads accept 5 (ctx only), 6 (packets + ctx), or 7 (packets + rooms +
+ * ctx) arguments so existing admin tests keep compiling.
  */
 export async function handleAdmin(
   request: Request,
@@ -840,13 +862,54 @@ export async function handleAdmin(
   authStore: AuthStore,
   admin: AdminStore,
   tStore: TournamentStore,
-  ctxOrRooms: RequestContext | RoomCloser,
-  maybeCtx?: RequestContext,
+  packets: PacketStore,
+  ctx: RequestContext,
+): Promise<Response | null>;
+export async function handleAdmin(
+  request: Request,
+  authStore: AuthStore,
+  admin: AdminStore,
+  tStore: TournamentStore,
+  packets: PacketStore,
+  rooms: RoomCloser,
+  ctx: RequestContext,
+): Promise<Response | null>;
+export async function handleAdmin(
+  request: Request,
+  authStore: AuthStore,
+  admin: AdminStore,
+  tStore: TournamentStore,
+  a: RequestContext | PacketStore | RoomCloser,
+  b?: RequestContext | RoomCloser,
+  c?: RequestContext,
 ): Promise<Response | null> {
-  const rooms: RoomCloser =
-    maybeCtx === undefined ? NOOP_ROOM_CLOSER : (ctxOrRooms as RoomCloser);
-  const ctx: RequestContext =
-    maybeCtx === undefined ? (ctxOrRooms as RequestContext) : maybeCtx;
+  function isPacketStore(x: unknown): x is PacketStore {
+    return (
+      !!x && typeof x === 'object' && typeof (x as PacketStore).insert === 'function'
+    );
+  }
+  function isRoomCloser(x: unknown): x is RoomCloser {
+    return (
+      !!x && typeof x === 'object' && typeof (x as RoomCloser).close === 'function'
+    );
+  }
+  let packets: PacketStore = EMPTY_PACKET_STORE;
+  let rooms: RoomCloser = NOOP_ROOM_CLOSER;
+  let ctx: RequestContext;
+  if (c !== undefined) {
+    // 7-arg: packets + rooms + ctx.
+    packets = a as PacketStore;
+    rooms = b as RoomCloser;
+    ctx = c;
+  } else if (b !== undefined) {
+    // 6-arg: either packets+ctx or rooms+ctx.
+    if (isPacketStore(a)) packets = a;
+    else if (isRoomCloser(a)) rooms = a;
+    ctx = b as RequestContext;
+  } else {
+    // 5-arg: just the context.
+    ctx = a as RequestContext;
+  }
   const url = new URL(request.url);
   const path = url.pathname;
   if (!path.startsWith('/api/admin')) return null;
@@ -865,7 +928,7 @@ export async function handleAdmin(
   if (path === '/api/admin/packets') {
     if (request.method !== 'GET')
       return json({ error: 'method not allowed' }, 405);
-    return handleListPackets(request, authStore, ctx);
+    return handleListPackets(request, authStore, packets, ctx);
   }
   if (path === '/api/admin/protests') {
     if (request.method !== 'GET')
@@ -903,7 +966,8 @@ export async function handleAdmin(
   if (packetAction) {
     if (request.method !== 'POST')
       return json({ error: 'method not allowed' }, 405);
-    return handleRemovePacket(request, authStore, ctx);
+    const id = decodeURIComponent(packetAction[1] ?? '');
+    return handleRemovePacket(request, authStore, packets, ctx, id);
   }
 
   // Per-protest actions: /api/admin/protests/:id/resolve

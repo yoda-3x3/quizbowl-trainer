@@ -951,7 +951,7 @@ describe('POST /api/admin/rooms/:code/close', () => {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/admin/packets', () => {
-  it('returns an empty list with a note', async () => {
+  it('returns an empty list when nothing is stored', async () => {
     const { authStore, tStore, admin, aliceCookie } = await seed();
     const res = await handleAdmin(
       req('GET', '/api/admin/packets', undefined, aliceCookie),
@@ -963,15 +963,13 @@ describe('GET /api/admin/packets', () => {
     expect(res?.status).toBe(200);
     const body = (await (res as Response).json()) as {
       packets: unknown[];
-      note: string;
     };
     expect(body.packets).toEqual([]);
-    expect(body.note).toMatch(/client-side/i);
   });
 });
 
 describe('POST /api/admin/packets/:id/remove', () => {
-  it('is a 404 stub', async () => {
+  it('404s an unknown id', async () => {
     const { authStore, tStore, admin, aliceCookie } = await seed();
     const res = await handleAdmin(
       req('POST', '/api/admin/packets/abc/remove', {}, aliceCookie),
