@@ -170,7 +170,19 @@ describe.skipIf(!existsSync(SW))('service worker', () => {
     expect(res.body).toBe('yesterday');
   });
 
-  it('answers any navigation with the cached index, SPA style', async () => {
+  it('serves the fresh index on a navigation when the network is up', async () => {
+    const { onFetch, cache } = loadWorker({
+      fetch: async () => ({ ok: true, body: '<!doctype html><!-- fresh -->', clone() { return this; } }),
+    });
+    await cache.put('/index.html', { body: '<!doctype html><!-- stale -->' });
+    const res = (await route(onFetch, {
+      url: 'https://app.example/anything/deep',
+      mode: 'navigate',
+    })) as { body: string };
+    expect(res.body).toBe('<!doctype html><!-- fresh -->');
+  });
+
+  it('falls back to the cached index when offline, SPA style', async () => {
     const { onFetch, cache } = loadWorker({
       fetch: async () => {
         throw new TypeError('offline');

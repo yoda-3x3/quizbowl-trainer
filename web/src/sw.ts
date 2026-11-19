@@ -82,7 +82,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (req.mode === 'navigate') {
-    event.respondWith(shellDocument(req));
+    event.respondWith(shellDocument());
     return;
   }
 
@@ -121,19 +121,27 @@ async function cacheFirst(req: Request): Promise<Response> {
 }
 
 /**
- * Every navigation resolves to the one HTML document. The app is an SPA with no
- * router, so there is nothing else a path could mean.
+ * Every navigation resolves to the one HTML document. Network-first so a new
+ * build is picked up on next page load without the user having to clear cache;
+ * hashed asset URLs change per build and are still cache-first below, so the
+ * fresh HTML immediately pulls in the new chunks.
  */
-async function shellDocument(req: Request): Promise<Response> {
+async function shellDocument(): Promise<Response> {
+  try {
+    const res = await fetch('/index.html', { cache: 'no-store' });
+    if (res.ok) {
+      const cache = await caches.open(SHELL_CACHE);
+      await cache.put('/index.html', res.clone());
+      return res;
+    }
+  } catch {
+    /* fall through to cache */
+  }
   const cached = await caches.match('/index.html');
   if (cached) return cached;
-  try {
-    return await fetch(req);
-  } catch {
-    const shell = await caches.match('/');
-    if (shell) return shell;
-    throw new Error('offline and no cached shell');
-  }
+  const shell = await caches.match('/');
+  if (shell) return shell;
+  throw new Error('offline and no cached shell');
 }
 
 export {};
