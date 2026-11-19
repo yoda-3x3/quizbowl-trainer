@@ -1,9 +1,9 @@
 /**
  * Admin Packets tab.
  *
- * Packets are not persisted server-side today — the importer runs in the host
- * browser (see web/NOTES.md). This tab therefore mostly surfaces the server's
- * note so the admin understands why the list is empty.
+ * Lists packets uploaded through /api/packets so an admin can remove any of
+ * them. The server-side note from the old stub is still rendered when the
+ * server sends one, so an older deployment keeps working.
  */
 
 import { Button, Sheet } from '../../ui';
@@ -17,7 +17,8 @@ export default function AdminPackets() {
       await removeAdminPacket(id);
       await list.refresh();
     } catch {
-      // The route is a 404 stub; keep the UI quiet.
+      // Swallow: the list refresh will show whether removal succeeded, and
+      // an older 404-stub server still produces this path for unknown ids.
     }
   };
 
@@ -67,6 +68,7 @@ export default function AdminPackets() {
                       <strong>{p.name}</strong>
                       <div className="tiny muted">
                         {p.tossup_count} tossups, {p.bonus_count} bonuses
+                        {p.uploader_name ? ` — ${p.uploader_name}` : ''}
                       </div>
                     </div>
                     <Button

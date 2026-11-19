@@ -54,7 +54,11 @@ export interface AdminPacket {
   name: string;
   tossup_count: number;
   bonus_count: number;
-  imported_at: number;
+  uploader_id: number | null;
+  uploader_name: string;
+  created_at: number;
+  /** Legacy alias for `created_at`, kept until older server builds roll out. */
+  imported_at?: number;
 }
 
 export interface AdminPacketList {
