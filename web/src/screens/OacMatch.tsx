@@ -732,7 +732,7 @@ const S = {
     border: '1px solid var(--line)',
     borderRadius: 8,
     padding: '8px 12px',
-    transition: 'border-color 160ms ease',
+    transition: 'border-color var(--dur-fast) var(--ease-standard)',
   } as CSSProperties,
   teamName: { fontSize: 12, color: 'var(--ink-soft)', flex: 1 } as CSSProperties,
   scoreValue: {

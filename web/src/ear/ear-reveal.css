@@ -28,7 +28,7 @@
   bottom: 0;
   background: var(--accent);
   opacity: 0.45;
-  transition: opacity 180ms ease;
+  transition: opacity var(--dur-fast) var(--ease-standard);
 }
 
 .earrev__seg--on {
@@ -99,7 +99,10 @@
 
 .staff__note--new {
   opacity: 0;
-  animation: staff-in 320ms ease forwards;
+  /* Staged entrance (see Staff.tsx's per-note animationDelay); timing is
+     deliberate and sits between --dur-medium and --dur-slow, so the duration
+     stays hardcoded per rule 4 while easing moves to a token. */
+  animation: staff-in 320ms var(--ease-emphasized) forwards;
 }
 
 @keyframes staff-in {

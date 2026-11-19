@@ -15,6 +15,17 @@
   --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-read: Georgia, 'Iowan Old Style', serif;
 
+  /* Motion tokens. Every transition / animation in the app uses these so
+     timing and easing stay coherent across screens. Don't vary by theme. */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);   /* most things */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);   /* entrances, big state changes */
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);         /* fades out, dismissals */
+
+  --dur-instant: 80ms;    /* micro: focus ring, button press */
+  --dur-fast: 160ms;      /* hover, small UI shifts */
+  --dur-medium: 240ms;    /* panel open, tab switch, modal */
+  --dur-slow: 400ms;      /* large transitions, section reveals */
+
   color-scheme: dark;
 }
 
@@ -46,6 +57,17 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Collapse the duration tokens so every token-driven transition and
+     animation finishes almost instantly. Keeping the properties running
+     (rather than animation: none) lets JS `transitionend` listeners still
+     fire. The `*` fallback catches anything that still uses a hardcoded
+     duration (e.g. deliberate staged animations). */
+  :root {
+    --dur-instant: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-medium: 0.01ms;
+    --dur-slow: 0.01ms;
+  }
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
@@ -244,7 +266,8 @@ input {
   gap: 3px;
   font-size: 11px;
   letter-spacing: 0.3px;
-  transition: color 120ms ease, opacity 120ms ease;
+  transition: color var(--dur-fast) var(--ease-standard),
+    opacity var(--dur-fast) var(--ease-standard);
 }
 
 .tabbar__btn[aria-current="page"] {
@@ -275,7 +298,11 @@ input {
   color: var(--ink);
   font-size: 13px;
   letter-spacing: 0.2px;
-  transition: opacity 120ms ease, transform 120ms ease, border-color 120ms ease;
+  transition: opacity var(--dur-fast) var(--ease-standard),
+    transform var(--dur-instant) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard);
 }
 
 .btn:hover:not(:disabled) {
@@ -404,7 +431,9 @@ input {
   border-radius: 999px;
   padding: 7px 11px;
   font-size: 12px;
-  transition: color 120ms ease, border-color 120ms ease;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard);
 }
 
 .chip[aria-pressed="true"] {
@@ -520,6 +549,9 @@ input {
   height: 16px;
   vertical-align: -2px;
   background: var(--accent);
+  /* Caret blink: 1s / steps(2, end) is the blink rhythm itself, not a UI
+     easing curve, so this animation deliberately doesn't use the motion
+     tokens. The reduced-motion `*` rule still collapses it. */
   animation: qbt-blink 1s steps(2, end) infinite;
 }
 
@@ -648,7 +680,9 @@ input {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--ink);
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-instant) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
 }
 
 .mode-card:hover {

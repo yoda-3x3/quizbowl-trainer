@@ -440,7 +440,8 @@ function ThemePicker({
               boxShadow: selected
                 ? '0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent)'
                 : 'none',
-              transition: 'border-color 120ms ease, box-shadow 120ms ease',
+              transition:
+                'border-color var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard)',
             }}
           >
             <span
