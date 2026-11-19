@@ -38,6 +38,7 @@ import {
 } from '../import/fetchPacket';
 import { parseOacPacket } from '../import/parseOac';
 import { parseStandardPacket } from '../import/parseStandard';
+import { uploadServerPacket } from '../packets';
 
 export interface ImportResult {
   kind: 'standard' | 'oac';
@@ -82,6 +83,12 @@ export default function Import({ onImported }: ImportProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<
+    | { kind: 'idle' }
+    | { kind: 'uploading' }
+    | { kind: 'uploaded'; id: string }
+    | { kind: 'failed'; message: string }
+  >({ kind: 'idle' });
 
   const fail = useCallback((e: unknown) => {
     setError(
@@ -183,7 +190,7 @@ export default function Import({ onImported }: ImportProps) {
     async (file: File) => {
       setBusy(true);
       setError(null);
-      setResult(null);
+      setResult(null); setUploadStatus({ kind: 'idle' });
       try {
         const packet = await importLocalFile(file);
         setResult(
@@ -209,7 +216,7 @@ export default function Import({ onImported }: ImportProps) {
   const onParsePasted = useCallback(async () => {
     setBusy(true);
     setError(null);
-    setResult(null);
+    setResult(null); setUploadStatus({ kind: 'idle' });
     try {
       const bytes = new TextEncoder().encode(pastedText);
       setResult(
@@ -269,7 +276,7 @@ export default function Import({ onImported }: ImportProps) {
     async (file: PacketFileRef) => {
       setBusy(true);
       setError(null);
-      setResult(null);
+      setResult(null); setUploadStatus({ kind: 'idle' });
       try {
         const packet = await fetchPacketFile(
           { url: file.url, filename: file.filename, gesture: userGesture() },
@@ -482,13 +489,54 @@ export default function Import({ onImported }: ImportProps) {
 
           <button
             style={S.button}
+            disabled={uploadStatus.kind === 'uploading'}
             onClick={() => {
               onImported?.(result);
-              setResult(null);
+              // Share the packet with every other device by uploading it to
+              // the server. The parse stays on the host for the local queue
+              // regardless of the upload outcome.
+              setUploadStatus({ kind: 'uploading' });
+              void uploadServerPacket(
+                (setName.trim() || result.filename).slice(0, 200),
+                {
+                  kind: result.kind,
+                  filename: result.filename,
+                  tossups: result.tossups,
+                  bonuses: result.bonuses,
+                  oac: result.oac,
+                  warnings: result.warnings,
+                },
+              )
+                .then((id) => setUploadStatus({ kind: 'uploaded', id }))
+                .catch((err: unknown) =>
+                  setUploadStatus({
+                    kind: 'failed',
+                    message:
+                      err instanceof Error
+                        ? err.message
+                        : 'upload failed',
+                  }),
+                );
             }}
           >
             Add to my questions
           </button>
+
+          {uploadStatus.kind === 'uploading' && (
+            <p style={S.hint}>Uploading packet to the server...</p>
+          )}
+          {uploadStatus.kind === 'uploaded' && (
+            <p style={S.hint}>
+              Uploaded. Other devices will see this packet in their Server
+              packets list.
+            </p>
+          )}
+          {uploadStatus.kind === 'failed' && (
+            <p style={S.error}>
+              Saved locally, but the server upload failed ({uploadStatus.message}).
+              Other devices will not see this packet.
+            </p>
+          )}
         </section>
       )}
     </div>
