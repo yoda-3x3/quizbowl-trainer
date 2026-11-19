@@ -117,7 +117,19 @@ function InRoom({
   }, [room, snap?.phase]);
 
   const words = snap?.question?.words ?? [];
-  const shown = words.slice(0, room.revealed);
+  const fullText = words.join(' ');
+  const shownChars = Math.min(room.revealedChars, fullText.length);
+  const shown = fullText.slice(0, shownChars);
+  const rest = fullText.slice(shownChars);
+  const powerIndex = snap?.question?.powerIndex ?? null;
+  let powerStart = 0;
+  let powerEnd = 0;
+  if (powerIndex !== null) {
+    for (let k = 0; k < powerIndex; k++) {
+      powerStart += (words[k] ?? '').length + 1;
+    }
+    powerEnd = powerStart + (words[powerIndex] ?? '').length;
+  }
   const myLockout = snap?.players.find((p) => p.id === me)?.lockedOut ?? false;
 
   return (
@@ -151,22 +163,22 @@ function InRoom({
       <div style={S.card}>
         {snap?.question ? (
           <p style={S.question}>
-            {shown.map((w, i) => (
-              <span
-                key={i}
-                style={
-                  snap.question?.powerIndex === i
-                    ? { color: 'var(--gold)' }
-                    : undefined
-                }
-              >
-                {w}{' '}
-              </span>
-            ))}
-            {snap.phase === 'resolved' ? (
-              <span style={{ color: 'var(--ink-soft)' }}>
-                {words.slice(room.revealed).join(' ')}
-              </span>
+            {powerIndex !== null ? (
+              <>
+                <span>{shown.slice(0, Math.min(shownChars, powerStart))}</span>
+                <span style={{ color: 'var(--gold)' }}>
+                  {shown.slice(
+                    Math.min(shownChars, powerStart),
+                    Math.min(shownChars, powerEnd),
+                  )}
+                </span>
+                <span>{shown.slice(Math.min(shownChars, powerEnd))}</span>
+              </>
+            ) : (
+              <span>{shown}</span>
+            )}
+            {snap.phase === 'resolved' && rest.length > 0 ? (
+              <span style={{ color: 'var(--ink-soft)' }}>{rest}</span>
             ) : null}
           </p>
         ) : (

@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomSnapshot, ServerMessage } from '../../workers/room/protocol';
-import { revealedAt } from '../engine/pacing';
+import { revealedAt, revealedCharsAt } from '../engine/pacing';
 import { RoomClient, type ConnectionState } from './client';
 
 export interface RoomView {
@@ -19,6 +19,9 @@ export interface RoomView {
   playerId: string | undefined;
   /** Words to show right now, interpolated between snapshots. */
   revealed: number;
+  /** Characters of `words.join(' ')` to show right now. Lets the UI type the
+   * question out letter-by-letter instead of popping whole words in. */
+  revealedChars: number;
   /** Whole seconds left on the buzzer's answer window, or null. */
   secondsLeft: number | null;
   /** The most recent judgement, for a flash of feedback. */
@@ -42,11 +45,13 @@ export function useRoom(
     useState<Extract<ServerMessage, { t: 'judged' }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
+  const [revealedChars, setRevealedChars] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
   // Guards against a late snapshot briefly rewinding the visible text.
   const lastQuestionId = useRef<string | null>(null);
   const highWater = useRef(0);
+  const highWaterChars = useRef(0);
 
   useEffect(() => {
     if (!code) return;
@@ -58,6 +63,7 @@ export function useRoom(
         if (s.question?.id !== lastQuestionId.current) {
           lastQuestionId.current = s.question?.id ?? null;
           highWater.current = 0;
+          highWaterChars.current = 0;
           setLastJudged(null);
         }
       },
@@ -95,10 +101,23 @@ export function useRoom(
           revealedAt(snap.schedule, elapsed),
           snap.question.words.length,
         );
+        const chars = revealedCharsAt(
+          snap.question.words,
+          snap.schedule,
+          elapsed,
+        );
         if (n > highWater.current) highWater.current = n;
-        setRevealed(snap.phase === 'resolved' ? snap.question.words.length : highWater.current);
+        if (chars > highWaterChars.current) highWaterChars.current = chars;
+        if (snap.phase === 'resolved') {
+          setRevealed(snap.question.words.length);
+          setRevealedChars(snap.question.words.join(' ').length);
+        } else {
+          setRevealed(highWater.current);
+          setRevealedChars(highWaterChars.current);
+        }
       } else {
         setRevealed(0);
+        setRevealedChars(0);
       }
 
       if (snap.answerDeadline !== null && snap.phase === 'buzzed') {
@@ -123,6 +142,7 @@ export function useRoom(
     snapshot,
     playerId: clientRef.current?.playerId,
     revealed,
+    revealedChars,
     secondsLeft,
     lastJudged,
     error,

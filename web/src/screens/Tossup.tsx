@@ -285,8 +285,22 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
 
   const stats = useMemo(() => summary(events), [events]);
 
-  const shown = reader.words.slice(0, reader.revealed);
-  const rest = reader.words.slice(reader.revealed);
+  // Letter-by-letter reveal is driven by `revealedChars` into the joined
+  // string. `revealed` (word count) is still the source of truth for scoring,
+  // power detection and the status line — only the rendered text uses chars.
+  const fullText = useMemo(() => reader.words.join(' '), [reader.words]);
+  const shownChars = Math.min(reader.revealedChars, fullText.length);
+  const shown = fullText.slice(0, shownChars);
+  const rest = fullText.slice(shownChars);
+  const powerRange = useMemo(() => {
+    if (reader.powerIndex === null) return null;
+    let start = 0;
+    for (let k = 0; k < reader.powerIndex; k++) {
+      start += (reader.words[k] ?? '').length + 1;
+    }
+    const end = start + (reader.words[reader.powerIndex] ?? '').length;
+    return { start, end };
+  }, [reader.words, reader.powerIndex]);
   const inPower =
     reader.powerIndex !== null && reader.revealed <= reader.powerIndex + 1;
 
@@ -354,21 +368,23 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
           </p>
         ) : (
           <p className="read read--card">
-            {shown.map((word, i) => (
-              <span
-                key={i}
-                className={
-                  reader.powerIndex !== null && i === reader.powerIndex
-                    ? 'read__power'
-                    : undefined
-                }
-              >
-                {word}{' '}
-              </span>
-            ))}
+            {powerRange ? (
+              <>
+                <span>{shown.slice(0, Math.min(shownChars, powerRange.start))}</span>
+                <span className="read__power">
+                  {shown.slice(
+                    Math.min(shownChars, powerRange.start),
+                    Math.min(shownChars, powerRange.end),
+                  )}
+                </span>
+                <span>{shown.slice(Math.min(shownChars, powerRange.end))}</span>
+              </>
+            ) : (
+              <span>{shown}</span>
+            )}
             {reader.phase === 'resolved' ? (
               rest.length > 0 ? (
-                <span className="read__rest">{rest.join(' ')}</span>
+                <span className="read__rest">{rest}</span>
               ) : null
             ) : (
               <span className="read__caret" aria-hidden="true" />

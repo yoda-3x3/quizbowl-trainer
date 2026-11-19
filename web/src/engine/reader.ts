@@ -24,18 +24,29 @@ import type { AttemptEvent, Judgement, Tossup } from '../types';
 import { judge as judgeAnswer, DEFAULT_STRICTNESS } from './judge';
 import { parseQuestion } from './power';
 import { scoreTossup } from './scoring';
-import { buildSchedule, revealedAt } from './pacing';
+import { buildSchedule, revealedAt, revealedCharsAt } from './pacing';
 
 // Re-exported so existing imports keep working. The implementations live in
 // pacing.ts because the Durable Object room server needs them without React.
-export { buildSchedule, revealedAt, wordDelay } from './pacing';
+export { buildSchedule, revealedAt, revealedCharsAt, wordDelay } from './pacing';
 
 export type ReaderPhase = 'idle' | 'reading' | 'buzzed' | 'done' | 'resolved';
 
 export interface ReaderHandle {
   tossup: Tossup | null;
   words: string[];
+  /**
+   * Word-grained reveal count. Used for scoring, power detection, and the
+   * attempt log, all of which key off a word index. The UI should prefer
+   * `revealedChars` for rendering text; `revealed` is here for logic.
+   */
   revealed: number;
+  /**
+   * Character-grained reveal count, into `words.join(' ')`. Interpolates
+   * within each word's scheduled time slice so the question types out
+   * letter-by-letter instead of popping whole words in.
+   */
+  revealedChars: number;
   powerIndex: number | null;
   phase: ReaderPhase;
   /** Whole seconds left on the post-buzz clock; null when it is not running. */
@@ -74,6 +85,7 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
   const [tossup, setTossup] = useState<Tossup | null>(null);
   const [phase, setPhase] = useState<ReaderPhase>('idle');
   const [revealed, setRevealed] = useState(0);
+  const [revealedChars, setRevealedChars] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [result, setResult] = useState<ReaderHandle['result']>(null);
@@ -84,6 +96,7 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
     words: [] as string[],
     powerIndex: null as number | null,
     schedule: [] as number[],
+    fullLen: 0,
     startedAt: 0,
     buzzedAt: 0,
     buzzWordIndex: null as number | null,
@@ -112,6 +125,7 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
         words: parsed.words,
         powerIndex: parsed.powerIndex,
         schedule: buildSchedule(parsed.words, wpm),
+        fullLen: parsed.words.join(' ').length,
         startedAt: 0,
         buzzedAt: 0,
         buzzWordIndex: null,
@@ -121,6 +135,7 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
       setTossup(next);
       setPhase('idle');
       setRevealed(0);
+      setRevealedChars(0);
       setSecondsLeft(null);
       setPendingPrompt(null);
       setResult(null);
@@ -133,13 +148,19 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
     t.current.startedAt = performance.now();
     setPhase('reading');
     setRevealed(0);
+    setRevealedChars(0);
     clearTimer();
     timer.current = setInterval(() => {
       const s = t.current;
       const elapsed = performance.now() - s.startedAt;
       const n = revealedAt(s.schedule, elapsed);
+      const chars = revealedCharsAt(s.words, s.schedule, elapsed);
       setRevealed(n);
-      if (n >= s.words.length) {
+      setRevealedChars(chars);
+      // The question stays "reading" until every letter of the final word has
+      // been typed out, not just until the schedule entry for that word fires.
+      // Otherwise the last word would pop in as a single block.
+      if (n >= s.words.length && chars >= s.fullLen) {
         clearTimer();
         setPhase('done');
       }
@@ -160,7 +181,16 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
     s.buzzWordIndex = Math.max(0, n - 1);
     s.deadline = s.buzzedAt + postBuzzSeconds * 1000;
 
+    // Freeze the visible text exactly where it was when the buzz landed, so
+    // the player sees precisely what they heard. The char cursor sits at the
+    // start of the word that was just being typed — that is how far along
+    // the moderator actually got.
+    let charsAtBuzz = 0;
+    for (let k = 0; k < s.buzzWordIndex; k++) charsAtBuzz += (s.words[k] ?? '').length + 1;
+    charsAtBuzz += (s.words[s.buzzWordIndex] ?? '').length;
+
     setRevealed(n);
+    setRevealedChars(charsAtBuzz);
     setPhase('buzzed');
     setSecondsLeft(postBuzzSeconds);
 
@@ -212,6 +242,7 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
 
       setResult({ judgement, points: outcome.points, powered: outcome.powered });
       setRevealed(s.words.length);
+      setRevealedChars(s.fullLen);
       setPhase('resolved');
 
       const event: AttemptEvent = {
@@ -254,6 +285,7 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
       tossup,
       words: t.current.words,
       revealed,
+      revealedChars,
       powerIndex: t.current.powerIndex,
       phase,
       secondsLeft,
@@ -264,6 +296,6 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
       submit,
       reset,
     }),
-    [tossup, revealed, phase, secondsLeft, pendingPrompt, result, start, buzz, submit, reset],
+    [tossup, revealed, revealedChars, phase, secondsLeft, pendingPrompt, result, start, buzz, submit, reset],
   );
 }
