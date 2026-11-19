@@ -22,6 +22,7 @@ import { TossupQueue } from '../data/qbreader';
 import { cacheTossups, cachedTossups, pickUnseen } from '../data/cache';
 import LiveArtPanel from '../art/LiveArtPanel';
 import LiveEarPanel from '../ear/LiveEarPanel';
+import PracticeSidebar from './PracticeSidebar';
 import {
   Button,
   PillRow,
@@ -303,7 +304,8 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
         </div>
       </header>
 
-      <div className="app__body">
+      <div className="practice-shell">
+      <div className="app__body practice-main">
         <PillRow>
           <StatPill label="heard" value={String(stats.heard)} />
           <StatPill
@@ -608,6 +610,8 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
             Storage is unavailable, so this session's history is in memory only.
           </p>
         ) : null}
+      </div>
+      <PracticeSidebar />
       </div>
     </>
   );

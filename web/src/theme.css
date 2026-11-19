@@ -94,6 +94,66 @@ input {
   margin-right: auto;
 }
 
+/* Two-column practice layout: reading surface left, persistent settings
+   sidebar right. Collapses to single column below 900px where the sidebar
+   hides and users fall back to the Settings tab. */
+.practice-shell {
+  display: block;
+}
+
+.practice-sidebar {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .practice-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding-right: 14px;
+    align-items: start;
+  }
+  .practice-shell .practice-main {
+    max-width: none;
+    margin: 0;
+  }
+  .practice-sidebar {
+    display: block;
+    position: sticky;
+    top: 60px;
+    max-height: calc(100dvh - 80px - var(--tabbar-h));
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .practice-sidebar__scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .practice-sidebar__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .practice-sidebar__title {
+    margin: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-soft);
+  }
+  .practice-sidebar__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+}
+
 .topbar {
   position: sticky;
   top: 0;

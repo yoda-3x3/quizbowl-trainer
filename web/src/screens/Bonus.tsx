@@ -18,6 +18,7 @@ import {
   type FormEvent,
 } from 'react';
 import { fetchBonuses } from '../data/qbreader';
+import PracticeSidebar from './PracticeSidebar';
 import { cacheBonuses, cachedBonuses, pickUnseen } from '../data/cache';
 import { judge } from '../engine/judge';
 import { scoreBonusPart } from '../engine/scoring';
@@ -264,7 +265,8 @@ export default function Bonus({ onExit, source }: BonusProps) {
         </div>
       </header>
 
-      <div className="app__body">
+      <div className="practice-shell">
+      <div className="app__body practice-main">
         <PillRow>
           <StatPill label="heard" value={String(stats.heard)} />
           <StatPill label="acc" value={pct(stats.accuracy)} />
@@ -406,6 +408,8 @@ export default function Bonus({ onExit, source }: BonusProps) {
             </Button>
           </Sheet>
         ) : null}
+      </div>
+      <PracticeSidebar />
       </div>
     </>
   );

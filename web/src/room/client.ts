@@ -91,8 +91,18 @@ export class RoomClient {
     this.closedByUs = false;
     this.events.connection?.(this.attempts === 0 ? 'connecting' : 'reconnecting');
 
+    // Cloudflare Pages Functions do not forward WebSocket upgrades (the edge
+    // rejects the handshake with HTTP 400), so when we are served from a
+    // pages.dev host, route the WS directly to the Rooms Worker. HTTP /api/*
+    // still goes through the Pages proxy.
+    const host =
+      typeof window !== 'undefined' ? window.location.hostname : '';
+    const wsOrigin =
+      !this.baseUrl && /\.pages\.dev$/.test(host)
+        ? 'https://quizbowl-rooms.vishruthvikram2029.workers.dev'
+        : this.baseUrl;
     const url = new URL(
-      `${this.baseUrl}/api/room/${this.code}/ws`,
+      `${wsOrigin}/api/room/${this.code}/ws`,
       window.location.href,
     );
     url.protocol = url.protocol.replace('http', 'ws');
