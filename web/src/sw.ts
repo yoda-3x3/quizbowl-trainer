@@ -128,8 +128,12 @@ async function cacheFirst(req: Request): Promise<Response> {
  */
 async function shellDocument(): Promise<Response> {
   try {
-    const res = await fetch('/index.html', { cache: 'no-store' });
-    if (res.ok) {
+    // Fetch the canonical shell URL. NOT '/index.html' — Cloudflare Pages
+    // 308-redirects /index.html to /, and a Response with redirected:true
+    // handed to respondWith for a navigation makes Chrome fail the whole
+    // navigation with ERR_FAILED. Fetching '/' avoids the redirect entirely.
+    const res = await fetch('/', { cache: 'no-store' });
+    if (res.ok && !res.redirected) {
       const cache = await caches.open(SHELL_CACHE);
       await cache.put('/index.html', res.clone());
       return res;
