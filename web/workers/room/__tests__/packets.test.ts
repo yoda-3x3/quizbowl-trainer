@@ -75,10 +75,10 @@ class MemoryPacketStore implements PacketStore {
   async insert(row: PacketRow): Promise<void> {
     this.rows.push({ ...row });
   }
-  async list(): Promise<PacketRow[]> {
+  async list() {
     return [...this.rows]
       .sort((a, b) => b.createdAt - a.createdAt)
-      .map((r) => ({ ...r }));
+      .map(({ data: _data, ...rest }) => ({ ...rest }));
   }
   async find(id: string): Promise<PacketRow | null> {
     const r = this.rows.find((x) => x.id === id);

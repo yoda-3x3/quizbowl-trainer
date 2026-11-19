@@ -42,9 +42,13 @@ export interface PacketListEntry {
   created_at: number;
 }
 
+/** Row shape for the list endpoint — `data` is omitted on purpose. */
+export type PacketSummaryRow = Omit<PacketRow, 'data'>;
+
 export interface PacketStore {
   insert(row: PacketRow): Promise<void>;
-  list(): Promise<PacketRow[]>;
+  /** Lists packets without the serialized body; one body is 10kb-1mb. */
+  list(): Promise<PacketSummaryRow[]>;
   find(id: string): Promise<PacketRow | null>;
   delete(id: string): Promise<boolean>;
 }
@@ -102,15 +106,24 @@ export function d1PacketStore(db: D1Database): PacketStore {
         .run();
     },
     async list() {
+      // No `data` column: a listing of 500+ packets at ~40KB each would
+      // otherwise balloon the Worker response past its memory cap.
       const res = await db
         .prepare(
-          `SELECT id, uploader_id, name, data, created_at,
+          `SELECT id, uploader_id, name, created_at,
                   tossup_count, bonus_count
              FROM packets
              ORDER BY created_at DESC`,
         )
         .all<Record<string, unknown>>();
-      return (res.results ?? []).map(rowToPacket);
+      return (res.results ?? []).map((row) => ({
+        id: String(row.id ?? ''),
+        uploaderId: numOrNull(row.uploader_id),
+        name: String(row.name ?? ''),
+        createdAt: num(row.created_at),
+        tossupCount: num(row.tossup_count),
+        bonusCount: num(row.bonus_count),
+      }));
     },
     async find(id) {
       const row = await db
