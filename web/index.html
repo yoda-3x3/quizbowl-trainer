@@ -17,6 +17,48 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Quizbowl" />
     <title>Quizbowl Trainer</title>
+    <script>
+      // Self-heal: if a same-origin script or stylesheet fails to load (stuck
+      // service worker serving stale HTML that points at hashed assets this
+      // deploy no longer has), unregister every SW, nuke every cache, and
+      // hard-reload once. Session-storage guard stops reload loops: at most
+      // one rescue per tab per session.
+      (function () {
+        var KEY = 'qb-sw-rescue-attempted';
+        function rescue(reason) {
+          if (sessionStorage.getItem(KEY)) return;
+          sessionStorage.setItem(KEY, reason || '1');
+          Promise.all([
+            navigator.serviceWorker
+              ? navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                })
+              : Promise.resolve(),
+            window.caches
+              ? caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                })
+              : Promise.resolve(),
+          ]).finally(function () {
+            location.replace(location.pathname + '?r=' + Date.now());
+          });
+        }
+        window.addEventListener('error', function (e) {
+          var t = e && e.target;
+          if (!t || t === window) return;
+          var url = t.src || t.href;
+          if (typeof url !== 'string') return;
+          if (url.indexOf(location.origin) !== 0) return;
+          if (/\.(js|mjs|css)(\?|$)/.test(url)) rescue('asset:' + url);
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          var msg = e && e.reason && (e.reason.message || String(e.reason));
+          if (msg && /Loading (chunk|CSS|module)|Failed to fetch dynamically imported/.test(msg)) {
+            rescue('chunk:' + msg);
+          }
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
