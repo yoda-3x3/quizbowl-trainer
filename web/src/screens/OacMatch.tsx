@@ -25,6 +25,11 @@ import type { OacPacket, OacTeam } from '../types';
 import { OAC_SCORING } from '../types';
 import { append } from '../engine/log';
 import {
+  fetchServerPacket,
+  listServerPackets,
+  type ServerPacketEntry,
+} from '../packets';
+import {
   createMatch,
   currentCategory,
   onTheClock,
@@ -55,19 +60,111 @@ export default function OacMatch({
   config?: Partial<OacMatchConfig>;
   teamNames?: Record<OacTeam, string>;
 }) {
-  if (!packet) {
-    return (
-      <div style={S.wrap}>
-        <h2 style={S.h2}>Ohio Academic Competition</h2>
-        <p style={S.hint}>
-          No packet loaded. Import an OAC packet, or build one from the question
-          bank, and the three rounds will play from it: ten categories, the
-          alphabet worksheet, then twenty final tossups.
-        </p>
-      </div>
-    );
+  const [picked, setPicked] = useState<OacPacket | null>(null);
+  const resolved = packet ?? picked;
+  if (!resolved) {
+    return <ServerPacketPicker onPick={setPicked} />;
   }
-  return <Match packet={packet} config={config} teamNames={teamNames} />;
+  return <Match packet={resolved} config={config} teamNames={teamNames} />;
+}
+
+/**
+ * Empty-state screen that lists the server packets a signed-in user has
+ * shared, and loads the full OAC packet the user picks. Standard packets are
+ * skipped — the OAC match engine needs an OacPacket.
+ */
+function ServerPacketPicker({
+  onPick,
+}: {
+  onPick(p: OacPacket): void;
+}) {
+  const [entries, setEntries] = useState<ServerPacketEntry[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoadError(null);
+    try {
+      setEntries(await listServerPackets());
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'failed to load');
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const load = async (id: string) => {
+    setBusyId(id);
+    setLoadError(null);
+    try {
+      const packet = await fetchServerPacket(id);
+      const oac = packet.data.oac;
+      if (!oac) {
+        setLoadError(
+          'That packet is not an OAC packet. The OAC match needs an OAC-format round.',
+        );
+        return;
+      }
+      onPick(oac);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'failed to load');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div style={S.wrap}>
+      <h2 style={S.h2}>Ohio Academic Competition</h2>
+      <p style={S.hint}>
+        No packet loaded. Import an OAC packet or pick one shared from another
+        device below. The three rounds will play from it: ten categories, the
+        alphabet worksheet, then twenty final tossups.
+      </p>
+
+      <section style={PICKER.panel}>
+        <div style={PICKER.header}>
+          <h3 style={PICKER.h3}>Server packets</h3>
+          <button
+            style={PICKER.buttonSmall}
+            onClick={() => void refresh()}
+            disabled={busyId !== null}
+          >
+            Refresh
+          </button>
+        </div>
+        {loadError && <p style={PICKER.error}>{loadError}</p>}
+        {entries === null ? (
+          <p style={S.hint}>Loading...</p>
+        ) : entries.length === 0 ? (
+          <p style={S.hint}>No packets have been uploaded yet.</p>
+        ) : (
+          <ul style={PICKER.list}>
+            {entries.map((e) => (
+              <li key={e.id} style={PICKER.listItem}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <strong>{e.name}</strong>
+                  <div style={PICKER.sub}>
+                    {e.tossup_count} tossups, {e.bonus_count} bonuses
+                    {e.uploader_name ? ` — ${e.uploader_name}` : ''}
+                  </div>
+                </div>
+                <button
+                  style={PICKER.buttonSmall}
+                  disabled={busyId !== null}
+                  onClick={() => void load(e.id)}
+                >
+                  {busyId === e.id ? 'Loading' : 'Load'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
 }
 
 function Match({
@@ -831,4 +928,50 @@ const S = {
     color: 'var(--ink-soft)',
     lineHeight: 1.6,
   } as CSSProperties,
+};
+
+const PICKER: Record<string, CSSProperties> = {
+  panel: {
+    background: 'var(--panel)',
+    border: '1px solid var(--line)',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 14,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 8,
+  },
+  h3: { margin: 0, fontSize: 15, color: 'var(--ink)' },
+  list: {
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  listItem: {
+    display: 'flex',
+    gap: 10,
+    alignItems: 'center',
+    padding: '8px 10px',
+    border: '1px solid var(--line)',
+    borderRadius: 6,
+    background: 'var(--panel-2)',
+    fontSize: 13,
+  },
+  sub: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 },
+  buttonSmall: {
+    background: 'var(--panel-2)',
+    color: 'var(--ink)',
+    border: '1px solid var(--line)',
+    borderRadius: 6,
+    padding: '5px 10px',
+    fontSize: 12,
+  },
+  error: { color: 'var(--bad)', fontSize: 13, margin: '0 0 8px' },
 };
