@@ -1,0 +1,184 @@
+/**
+ * Theme palettes keyed to real public-domain paintings.
+ *
+ * Each `[data-theme="..."]` block overrides the global tokens from theme.css
+ * so that a single attribute on the app shell re-paints the whole app. Only
+ * `classic` has no backdrop; it IS the default and must remain byte-identical
+ * to the current dark neutral palette, which is why its block only re-asserts
+ * the baseline.
+ *
+ * The attribute lives on the `.app` div (see App.tsx), not on :root, so
+ * every selector here is `.app[data-theme='x']` or a descendant of one.
+ *
+ * Tokens the themes override:
+ *   --bg, --panel, --panel-2, --line, --ink, --ink-soft, --accent
+ *   --display-font (new; used by topbar title, sheet title, mode card title)
+ *   --text-font    (new; used by the reading card .read)
+ *
+ * The backdrop painting is the character of each skin, so panels and inputs
+ * are tuned towards translucent "paper laid over a painting" rather than a
+ * solid dark surface. Each palette is sampled from its painting and chosen
+ * to preserve a 4.5:1 ink-on-panel ratio at the wordmark, the reading card
+ * and the sheet titles. The `--accent` leans towards each painting's
+ * secondary colour so the accent reads as "signal" rather than disappear.
+ */
+
+/* Default --display-font / --text-font: fall through to the base UI stack so
+   screens that do not name a theme look exactly like they did before themes.
+   Put on `.app` rather than :root so a themed .app can override them with the
+   same specificity-level attribute selectors below.
+
+   `isolation: isolate` turns .app into its own stacking context so the
+   fixed-position ThemeBackdrop can sit at z-index -1 BEHIND every child
+   without slipping behind the body background and disappearing. */
+.app {
+  --display-font: var(--font-ui);
+  --text-font: var(--font-read);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.theme-backdrop {
+  z-index: -1;
+}
+
+/* Classic — the dark neutral palette. No backdrop; defaults already apply. */
+.app[data-theme='classic'] {
+  /* Explicit so a theme switch back to classic re-asserts every token. */
+  --bg: #0f1216;
+  --panel: #171c23;
+  --panel-2: #1e242d;
+  --line: #2a323d;
+  --ink: #e7ecf3;
+  --ink-soft: #8b97a7;
+  --accent: #4fc3f7;
+  --display-font: var(--font-ui);
+  --text-font: var(--font-read);
+}
+
+/* ---------------------------------------------------------------------------
+   Art — Vermeer, The Art of Painting (c. 1666).
+   Warm ochre, deep umber, candle highlight. Serif display.
+   =========================================================================== */
+.app[data-theme='art'] {
+  --bg: #1a130a;
+  --panel: #241a0f;
+  --panel-2: #2e2213;
+  --line: #4a3a23;
+  --ink: #f5ead4;
+  --ink-soft: #c9ae79;
+  --accent: #e0a94a;
+  --display-font: 'Cormorant Garamond', Georgia, 'Iowan Old Style', serif;
+  --text-font: 'Cormorant Garamond', Georgia, 'Iowan Old Style', serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Science — Wright of Derby, Philosopher Lecturing on the Orrery (1766).
+   Deep indigo + candle-amber. Condensed serif for headings.
+   =========================================================================== */
+.app[data-theme='science'] {
+  --bg: #0a0d1a;
+  --panel: #111526;
+  --panel-2: #181d33;
+  --line: #2a2f4a;
+  --ink: #ece4d0;
+  --ink-soft: #9aa0b9;
+  --accent: #f0b65a;
+  --display-font: 'Playfair Display', Georgia, 'Iowan Old Style', serif;
+  --text-font: 'Playfair Display', Georgia, 'Iowan Old Style', serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Literature — Fragonard, The Reader (c. 1770).
+   Dusty rose + ivory. Transitional serif display.
+   =========================================================================== */
+.app[data-theme='literature'] {
+  --bg: #2b1a1e;
+  --panel: #3a2026;
+  --panel-2: #4a2a30;
+  --line: #5e3a43;
+  --ink: #f3e3d8;
+  --ink-soft: #d5a79f;
+  --accent: #e8a295;
+  --display-font: 'Libre Caslon Text', Georgia, 'Iowan Old Style', serif;
+  --text-font: 'Libre Caslon Text', Georgia, 'Iowan Old Style', serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Mythology — Botticelli, The Birth of Venus (c. 1485).
+   Sea-green + gold. Classical capital serif.
+   =========================================================================== */
+.app[data-theme='mythology'] {
+  --bg: #0e1f1b;
+  --panel: #142b25;
+  --panel-2: #1b3a32;
+  --line: #2c5146;
+  --ink: #f2ecd6;
+  --ink-soft: #a3bfae;
+  --accent: #d9b56a;
+  --display-font: 'Cinzel', Georgia, 'Iowan Old Style', serif;
+  --text-font: 'Cormorant Garamond', Georgia, 'Iowan Old Style', serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Math — Byrne's Euclid (1847). Flat primaries on cream. Geometric sans body,
+   slab serif display. The Byrne palette is light on cream, so this theme
+   flips to a light colour-scheme (form controls inherit).
+   =========================================================================== */
+.app[data-theme='math'] {
+  --bg: #efe6d0;
+  --panel: #f6ede0;
+  --panel-2: #ece0c8;
+  --line: #c6b48a;
+  --ink: #1b1a16;
+  --ink-soft: #6b5a3e;
+  --accent: #c0362b;
+  --display-font: 'Spectral', Georgia, 'Iowan Old Style', serif;
+  --text-font: 'Spectral', Georgia, 'Iowan Old Style', serif;
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+   Hooks: display font applies to the wordmark, sheet titles and mode cards.
+   The reading surface picks up --text-font so question text acquires the
+   theme's character without changing the engine's defaults.
+   =========================================================================== */
+
+.app[data-theme]:not([data-theme='classic']) .topbar__title,
+.app[data-theme]:not([data-theme='classic']) .sheet__title,
+.app[data-theme]:not([data-theme='classic']) .mode-card__title {
+  font-family: var(--display-font);
+  letter-spacing: 0.3px;
+}
+
+.app[data-theme]:not([data-theme='classic']) .read {
+  font-family: var(--text-font);
+}
+
+/* Soften panel backgrounds over a painting so the artwork reads through.
+   Classic keeps its flat opaque panels. */
+.app[data-theme]:not([data-theme='classic']) .sheet,
+.app[data-theme]:not([data-theme='classic']) .mode-card {
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+/* The reading card is where the backdrop would most hurt legibility, so it
+   stays nearly opaque in every theme. */
+.app[data-theme]:not([data-theme='classic']) .read--card {
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+/* Topbar and tab bar sit directly on the backdrop; both earn a blur so the
+   artwork reads as "behind frosted glass" rather than a muddy band. */
+.app[data-theme]:not([data-theme='classic']) .topbar {
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.app[data-theme]:not([data-theme='classic']) .tabbar {
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
