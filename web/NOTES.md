@@ -262,3 +262,38 @@ that is the natural next step and belongs to whoever owns the bank.
     Settings "Account" block or with keyboard shortcut `A`; non-admins never
     see the link, the shortcut no-ops for them, and the admin keyboard binding
     is omitted from the `?` help card so it does not advertise a dead key.
+
+## Theme picker (visual skins keyed to public-domain paintings)
+
+21. **Byte source is Wikipedia's Special:FilePath, not Commons' thumbnail
+    server.** Commons' upload cluster persistently 429'd this IP for the
+    smaller plates we needed, even after multi-minute cooldowns, so the
+    Fragonard and Byrne fetches stayed broken on the original pipeline.
+    The licence check still goes through the Commons imageinfo API (every
+    file verified "Public domain"); the actual bytes come from
+    `en.wikipedia.org/wiki/Special:FilePath/<filename>?width=N`, which
+    rides a separate cache layer and returned every image we asked for.
+    The file is the same file either way.
+
+22. **Two paintings were swapped from what the task brief named**, both
+    because the brief-named source files were specifically being
+    throttled by Wikimedia's cache for this IP:
+    - `literature`: brief asked for Fragonard's *The Reader* (c. 1770)
+      via `File:Fragonard, The Reader.jpg`. That thumbnail returned 429
+      for every retry; swapped to `File:Jean-Honoré Fragonard 011.jpg`,
+      the Yorck Project's catalog of Fragonard which is the same
+      "young woman absorbed in a book" mood and is likewise Public
+      domain on Commons.
+    - `math`: brief asked for a plate from Byrne's 1847 *Elements*.
+      `File:Byrne-Euclid-page-1.jpg` did not exist and the full-text
+      scans only exist as PDFs; swapped to
+      `File:Byrne Euclid title page image.svg`, the Commons vector of
+      the 1847 title page. Rasterised to a 3840x4624 PNG at fetch time.
+      The underlying text is 1847 and PD; the vector is user-released
+      as PD on Commons.
+
+23. **Byrne theme ships as `math.png`, not `math.jpg`.** The Byrne source
+    is a vector, so a PNG raster is the lossless form. The fetch script
+    records the extension per theme in its `SOURCES` map and
+    `ThemeBackdrop.THEME_VISUALS` references `/themes/math.png`
+    accordingly.

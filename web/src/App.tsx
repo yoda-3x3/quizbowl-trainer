@@ -29,9 +29,10 @@ import OacMatch from './screens/OacMatch';
 import StudyMode from './art/StudyMode';
 import Tournaments from './screens/Tournaments';
 import Admin from './screens/Admin';
-import { Button, Sheet, TabBar, type TabItem } from './ui';
+import { Button, Sheet, TabBar, useSettings, type TabItem } from './ui';
 import { useShortcuts } from './shortcuts';
 import { useAuth } from './auth';
+import ThemeBackdrop from './ThemeBackdrop';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -50,6 +51,8 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const auth = useAuth();
+  const [settings] = useSettings();
+  const theme = settings.theme;
 
   const toHome = () => setPractice('home');
   const isAdmin = auth.user?.role === 'admin';
@@ -88,7 +91,8 @@ export default function App() {
 
   if (showAdmin) {
     return (
-      <div className="app">
+      <div className="app" data-theme={theme}>
+        <ThemeBackdrop theme={theme} />
         <Admin onExit={() => setShowAdmin(false)} />
         {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
       </div>
@@ -96,7 +100,8 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
+      <ThemeBackdrop theme={theme} />
       {tab === 'practice' ? (
         <Practice
           view={practice}

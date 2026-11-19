@@ -23,6 +23,45 @@ import { DEFAULT_STRICTNESS } from '../engine/judge';
 
 const KEY = 'qbt.settings.v1';
 
+/**
+ * The visual skin. `classic` is the default and keeps the existing dark
+ * neutral palette with no backdrop, so existing users see no change until
+ * they pick a theme. Other ids anchor on a real public-domain painting.
+ */
+export type ThemeId =
+  | 'classic'
+  | 'art'
+  | 'science'
+  | 'literature'
+  | 'mythology'
+  | 'math';
+
+export interface ThemeOption {
+  id: ThemeId;
+  label: string;
+  /** Short description shown under the swatch. */
+  caption: string;
+}
+
+/**
+ * Ordered list of themes with their picker labels. The caption names the
+ * painting so a viewer can trust which artwork a swatch stands for.
+ */
+export const THEMES: readonly ThemeOption[] = [
+  { id: 'classic', label: 'Classic', caption: 'Default dark palette' },
+  { id: 'art', label: 'Art', caption: 'Vermeer, The Art of Painting' },
+  { id: 'science', label: 'Science', caption: 'Wright of Derby, Orrery' },
+  { id: 'literature', label: 'Literature', caption: 'Fragonard, The Reader' },
+  { id: 'mythology', label: 'Mythology', caption: 'Botticelli, Birth of Venus' },
+  { id: 'math', label: 'Math', caption: "Byrne's Euclid (1847)" },
+];
+
+const THEME_IDS: readonly ThemeId[] = THEMES.map((t) => t.id);
+
+function isTheme(value: unknown): value is ThemeId {
+  return typeof value === 'string' && (THEME_IDS as readonly string[]).includes(value);
+}
+
 export interface Settings {
   /** Words per minute the reader reveals at. */
   wpm: number;
@@ -37,6 +76,8 @@ export interface Settings {
   subcategories: string[];
   /** 1 lenient to 12 strict. 3-9 are an identical plateau upstream. */
   strictness: number;
+  /** Visual skin. `classic` is the default and the fallback for unknown values. */
+  theme: ThemeId;
 }
 
 export const WPM_RANGE = { min: 60, max: 300 } as const;
@@ -50,6 +91,7 @@ export const DEFAULT_SETTINGS: Settings = {
   categories: [],
   subcategories: [],
   strictness: DEFAULT_STRICTNESS,
+  theme: 'classic',
 };
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -114,6 +156,7 @@ export function normalizeSettings(raw: unknown): Settings {
     categories,
     subcategories,
     strictness: clamp(Number(r.strictness ?? DEFAULT_SETTINGS.strictness), 1, 12),
+    theme: isTheme(r.theme) ? r.theme : DEFAULT_SETTINGS.theme,
   };
 }
 

@@ -67,6 +67,17 @@ describe('normalizeSettings', () => {
   it('rejects a non-numeric pace rather than storing NaN', () => {
     expect(normalizeSettings({ wpm: 'fast' }).wpm).toBe(WPM_RANGE.min);
   });
+
+  it('normalizes an unknown theme to classic', () => {
+    expect(normalizeSettings({ theme: 'punk-rock' }).theme).toBe('classic');
+    expect(normalizeSettings({ theme: 123 }).theme).toBe('classic');
+    expect(normalizeSettings({}).theme).toBe('classic');
+  });
+
+  it('keeps a valid theme intact', () => {
+    expect(normalizeSettings({ theme: 'art' }).theme).toBe('art');
+    expect(normalizeSettings({ theme: 'math' }).theme).toBe('math');
+  });
 });
 
 describe('subcategoriesFor', () => {

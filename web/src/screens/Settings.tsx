@@ -8,7 +8,7 @@
  * than breaking the screen.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import {
   CATEGORIES,
   DIFFICULTY_LABELS,
@@ -31,12 +31,15 @@ import {
   Sheet,
   SliderField,
   POST_BUZZ_RANGE,
+  THEMES,
   WPM_RANGE,
   resetSettings,
   settingsArePersisted,
   subcategoriesFor,
   useSettings,
+  type ThemeId,
 } from '../ui';
+import { THEME_VISUALS } from '../ThemeBackdrop';
 import { useAuth } from '../auth';
 import SignIn from './SignIn';
 import SignUp from './SignUp';
@@ -277,6 +280,17 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
           />
         </Sheet>
 
+        <Sheet title="Theme">
+          <p className="tiny muted">
+            Each named theme anchors on a public-domain painting. Classic is
+            the default dark palette with no backdrop.
+          </p>
+          <ThemePicker
+            value={settings.theme}
+            onPick={(theme) => set({ theme })}
+          />
+        </Sheet>
+
         <Sheet title="Data">
           <p className="tiny muted">
             {counts
@@ -356,5 +370,109 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
         </Sheet>
       </div>
     </>
+  );
+}
+
+/**
+ * Six labelled swatches, including Classic. The swatch IS the painting,
+ * cropped square; Classic shows a flat colour chip because it has no
+ * backdrop. Picker is a radiogroup for keyboard users: tab lands on the
+ * current pick, arrow keys move, Enter / Space commits.
+ */
+function ThemePicker({
+  value,
+  onPick,
+}: {
+  value: ThemeId;
+  onPick(next: ThemeId): void;
+}) {
+  const ids = THEMES.map((t) => t.id);
+
+  const onKey = (e: KeyboardEvent<HTMLButtonElement>, id: ThemeId) => {
+    const idx = ids.indexOf(id);
+    if (idx < 0) return;
+    let next = idx;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (idx + 1) % ids.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
+      next = (idx - 1 + ids.length) % ids.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = ids.length - 1;
+    else return;
+    e.preventDefault();
+    const nextId = ids[next];
+    if (nextId) onPick(nextId);
+  };
+
+  return (
+    <div
+      className="theme-picker"
+      role="radiogroup"
+      aria-label="Theme"
+      style={{
+        display: 'grid',
+        gap: 8,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))',
+      }}
+    >
+      {THEMES.map((t) => {
+        const selected = t.id === value;
+        const image = t.id === 'classic' ? null : THEME_VISUALS[t.id].image;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onPick(t.id)}
+            onKeyDown={(e) => onKey(e, t.id)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              padding: 6,
+              borderRadius: 'var(--radius)',
+              border: `1px solid ${selected ? 'var(--accent)' : 'var(--line)'}`,
+              background: 'var(--panel-2)',
+              color: 'var(--ink)',
+              cursor: 'pointer',
+              outline: 'none',
+              boxShadow: selected
+                ? '0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent)'
+                : 'none',
+              transition: 'border-color 120ms ease, box-shadow 120ms ease',
+            }}
+          >
+            <span
+              aria-hidden="true"
+              data-theme-swatch={t.id}
+              style={{
+                display: 'block',
+                width: '100%',
+                aspectRatio: '1 / 1',
+                borderRadius: 4,
+                border: '1px solid var(--line)',
+                background:
+                  image !== null
+                    ? `center / cover no-repeat url(${image})`
+                    : 'linear-gradient(135deg, #171c23 0%, #2a323d 100%)',
+              }}
+            />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                lineHeight: 1.2,
+              }}
+            >
+              {t.label}
+            </span>
+            <span className="tiny muted" style={{ lineHeight: 1.35 }}>
+              {t.caption}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

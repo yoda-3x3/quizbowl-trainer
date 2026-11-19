@@ -29,5 +29,6 @@ export {
   DEFAULT_SETTINGS,
   WPM_RANGE,
   POST_BUZZ_RANGE,
+  THEMES,
 } from './useSettings';
-export type { Settings } from './useSettings';
+export type { Settings, ThemeId, ThemeOption } from './useSettings';
