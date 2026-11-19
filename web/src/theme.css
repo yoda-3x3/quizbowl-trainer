@@ -75,13 +75,23 @@ input {
 .app__body {
   flex: 1;
   width: 100%;
-  max-width: 820px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 12px 14px calc(var(--tabbar-h) + var(--safe-b) + 18px);
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+
+/* Keep the question-reading surface at a comfortable measure — overly long
+   lines hurt tossup legibility — even when the shell itself is wide. */
+.app__body .read,
+.app__body .read--card {
+  max-width: 820px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .topbar {

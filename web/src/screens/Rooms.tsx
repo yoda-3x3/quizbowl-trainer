@@ -260,12 +260,14 @@ function InRoom({
 
 const S = {
   wrap: {
-    maxWidth: 760,
+    width: '100%',
+    maxWidth: 1040,
     margin: '0 auto',
     padding: 16,
     display: 'flex',
     flexDirection: 'column',
     gap: 12,
+    boxSizing: 'border-box',
   } as CSSProperties,
   h2: { margin: 0, fontSize: 18 } as CSSProperties,
   hint: { margin: 0, fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.5 } as CSSProperties,
@@ -343,6 +345,10 @@ const S = {
     borderRadius: 8,
     padding: '18px 20px',
     minHeight: 170,
+    maxWidth: 820,
+    width: '100%',
+    marginLeft: 'auto',
+    marginRight: 'auto',
   } as CSSProperties,
   question: { margin: 0, fontFamily: 'var(--font-read)', fontSize: 17, lineHeight: 1.62 } as CSSProperties,
   waiting: { margin: 0, color: 'var(--ink-soft)', fontSize: 13 } as CSSProperties,
