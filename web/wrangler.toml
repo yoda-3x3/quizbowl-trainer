@@ -2,7 +2,7 @@ name = "quizbowl-rooms"
 main = "workers/room/index.ts"
 compatibility_date = "2024-11-27"
 compatibility_flags = ["nodejs_compat"]
-account_id = "261f5b8f139b7d464d0f0069938b89a9"
+account_id = "a457e22d87f72f70b620c3819db6f7c0"
 
 [[durable_objects.bindings]]
 name = "ROOM"
@@ -18,7 +18,7 @@ new_sqlite_classes = ["Room"]
 [[d1_databases]]
 binding = "DB"
 database_name = "qb-trainer-auth"
-database_id = "76991ab2-3577-470a-aa3e-32139d85f8fd"
+database_id = "a2f6f5e8-ed7d-4828-a9c9-5ec64425a0a4"
 migrations_dir = "workers/room/migrations"
 
 # Local dev:   npx wrangler dev

@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "quizbowl-rooms" generated at 2026-11-19T01:32:52.254Z.
