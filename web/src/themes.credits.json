@@ -1,27 +1,33 @@
 {
-  "literature": {
-    "title": "Das Studium, Der Gesang, Bildnis einer jungen Frau in spanischem Kostüm",
-    "artist": "Jean-Honoré Fragonard",
-    "licence": "Public domain",
-    "source": "https://commons.wikimedia.org/wiki/File:Jean-Honor%C3%A9_Fragonard_011.jpg"
-  },
   "science": {
     "title": "Philosopher giving a lecture on the orrerytitle QS:P1476,en:\"Philosopher giving a lecture on the orrery\"label QS:Len,\"Philosopher giving a lecture on the orrery\"",
     "artist": "Joseph Wright of Derby",
     "licence": "Public domain",
-    "source": "https://commons.wikimedia.org/wiki/File:Joseph_Wright_of_Derby_-_Philosopher_giving_a_lecture_on_the_orrery_-_Google_Art_Project.jpg"
+    "source": "https://commons.wikimedia.org/wiki/File:Joseph_Wright_of_Derby_-_Philosopher_giving_a_lecture_on_the_orrery_-_Google_Art_Project.jpg",
+    "width": 2400,
+    "height": 1776
   },
   "art": {
     "title": "German: Die Malkunst The Art of Paintingtitle QS:P1476,de:\"Die Malkunst \"label QS:Lde,\"Die Malkunst \"label QS:Les,\"El arte de la pintura\"label QS:Lca,\"Al·legoria de la pintura\"label QS:Lfa,\"هنر نقاشی\"label QS:Lzh,\"绘画艺术\"label QS:Lda,\"Allegori over malerkunsten\"label QS:Ltr,\"The Art of Painting (Vermeer)\"label QS:Lja,\"絵画芸術\"label QS:Lsv,\"Målarkonsten\"label QS:Lhe,\"אמנות הציור\"label QS:Lavk,\"Lingeropa (trutca ke Vermeer)\"label QS:Lfi,\"Maalaustaide\"label QS:Leo,\"La Arto de Pentrado\"label QS:Lit,\"Allegoria della Pittura\"label QS:Lfr,\"L'Art de la peinture\"label QS:Lhr,\"Alegorija slikarstva\"label QS:Lpt,\"A Arte da Pintura\"label QS:Lcs,\"Alegorie malířství\"label QS:Lko,\"회화의 기술\"label QS:Lsr,\"Уметност сликања\"label QS:Lsl,\"Umetnost slikanja (Vermeer)\"label QS:Lmk,\"Уметноста на сликањето\"label QS:Len,\"The Art of Painting\"label QS:Luk,\"Алегорія живопису\"label QS:Lth,\"ศิลปะของการเขียนภาพ\"label QS:Lpl,\"Alegoria malarstwa\"label QS:Lnb,\"«Maleren i sitt atelier»\"label QS:Lnl,\"De Schilderkunst\"label QS:Lru,\"Мастерская художника\"label QS:Lml,\"ദി ആർട്ട് ഓഫ് പെയിന്റിംഗ്\"label QS:Larz,\"فن الرسم (لوحه)\"label QS:Laz,\"Rəssamlığın alleqoriyası\"label QS:Lgl,\"A arte da pintura\"label QS:Lar,\"فن الرسم\"label QS:Lbr,\"Alegorienn al liverezh\"label QS:Lro,\"Alegoria picturii\"",
     "artist": "Johannes Vermeer",
     "licence": "Public domain",
-    "source": "https://commons.wikimedia.org/wiki/File:Jan_Vermeer_-_The_Art_of_Painting_-_Google_Art_Project.jpg"
+    "source": "https://commons.wikimedia.org/wiki/File:Jan_Vermeer_-_The_Art_of_Painting_-_Google_Art_Project.jpg",
+    "width": 2400,
+    "height": 2851
   },
   "mythology": {
     "title": "Polish: Narodziny Wenus The Birth of Venustitle QS:P1476,pl:\"Narodziny Wenus \"label QS:Lpl,\"Narodziny Wenus \"label QS:Les,\"El nacimiento de Venus\"label QS:Lms,\"Kelahiran Venus\"label QS:Lbg,\"Раждането на Венера\"label QS:Lksh,\"D Jeburt van d Venus\"label QS:Lzh-hk,\"維納斯的誕生\"label QS:Lsk,\"Zrodenie Venuše\"label QS:Luk,\"Народження Венери\"label QS:Lzh-hant,\"維納斯的誕生\"label QS:Lzh-cn,\"维纳斯的诞生\"label QS:Lko,\"비너스의 탄생\"label QS:Lkk,\"Венераның дүниеге келуі\"label QS:Leo,\"Naskiĝo de Venuso\"label QS:Lcs,\"Zrození Venuše\"label QS:Lbs,\"Rođenje Venere.\"label QS:Lfr,\"La Naissance de Vénus\"label QS:Lhr,\"Rođenje Venere\"label QS:Lvi,\"Sự ra đời của thần Vệ Nữ\"label QS:Llv,\"Veneras dzimšana\"label QS:Lsr,\"Рођење Венере\"label QS:Lzh-sg,\"维纳斯的诞生\"label QS:Lnb,\"Venus' fødsel\"label QS:Laz,\"Veneranın doğulması\"label QS:Len,\"The Birth of Venus\"label QS:Lar,\"مولد فينوس\"label QS:Lbr,\"Ganedigezh Gwener\"label QS:Lyue,\"維納斯出世\"label QS:Leu,\"Venusen jaiotza\"label QS:Lru,\"Рождение Венеры\"label QS:Lde,\"Die Geburt der Venus\"label QS:Lga,\"Breith Véineas\"label QS:Lsr-ec,\"Рођење Венере\"label QS:Lzh,\"维纳斯的诞生\"label QS:Lda,\"Venus' fødsel\"label QS:Lka,\"ვენერას დაბადება\"label QS:Lja,\"ヴィーナスの誕生\"label QS:Lnrm,\"La Naîté de Vénus (Botticelli)\"label QS:Larz,\"مولد فينوس\"label QS:Lhe,\"הולדת ונוס\"label QS:Lla,\"Ortus Veneris\"label QS:Lfi,\"Venuksen syntymä\"label QS:Lit,\"Nascita di Venere\"label QS:Let,\"Venuse sünd\"label QS:Lfa,\"زایش ونوس\"label QS:Lvec,\"Nàsita de Venare\"label QS:Lpap,\"Nacimento di Venus di Botticelli\"label QS:Lpt,\"O Nascimento de Vênus\"label QS:Lmt,\"It-Twelid ta’ Venere\"label QS:Lhy,\"Վեներայի ծնունդը\"label QS:Lbe,\"Нараджэнне Венеры\"label QS:Llt,\"Veneros gimimas\"label QS:Lsl,\"Rojstvo Venere\"label QS:Lmk,\"Раѓањето на Венера\"label QS:Lcy,\"Genedigaeth Gwener\"label QS:Lzh-tw,\"維納斯的誕生\"label QS:Lth,\"กำเนิดวีนัส\"label QS:Lsh,\"Rođenje Venere\"label QS:Lsi,\"botticelli\"label QS:Lnl,\"De Geboorte van Venus\"label QS:Lca,\"El naixement de Venus\"label QS:Ltr,\"Venüs'ün Doğuşu\"label QS:Lsv,\"Venus födelse\"label QS:Lcv,\"Венера çурални\"label QS:Lgl,\"O nacemento de Venus\"label QS:Lzh-hans,\"维纳斯的诞生\"label QS:Lel,\"Η Γέννηση της Αφροδίτης\"label QS:Lro,\"Nașterea zeiței Venus\"",
     "artist": "Sandro Botticelli",
     "licence": "Public domain",
-    "source": "https://commons.wikimedia.org/wiki/File:Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg"
+    "source": "https://commons.wikimedia.org/wiki/File:Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg",
+    "width": 2400,
+    "height": 1507
+  },
+  "literature": {
+    "title": "French: Jeune Fille lisant A Young Girl Readingtitle QS:P1476,fr:\"Jeune Fille lisant \"label QS:Lfr,\"Jeune Fille lisant \"label QS:Les,\"La lectora\"label QS:Lru,\"Молодая читательница\"label QS:Lde,\"Lesende Frau\"label QS:Len-gb,\"A Young Girl Reading\"label QS:Lhy,\"Երիտասարդ ընթերցող\"label QS:Lzh,\"讀書的少女\"label QS:Lda,\"En ung pige læser\"label QS:Ltr,\"Okuyan Genç Kız\"label QS:Lja,\"読書する娘\"label QS:Larz,\"القارئه الحسناء\"label QS:Lhe,\"נערה קוראת (ז'אן-אונורה פרגונאר)\"label QS:Lko,\"책 읽는 소녀\"label QS:Lhyw,\"Երիտասարդ ընթերցողը\"label QS:Len-ca,\"A Young Girl Reading\"label QS:Lit,\"La lettrice\"label QS:Lht,\"La Liseuse\"label QS:Lhr,\"Mlada čitačica\"label QS:Lpt,\"A Leitora\"label QS:Lsr,\"Девојка чита књигу\"label QS:Lsl,\"Mladenka bere\"label QS:Lpt-br,\"A Leitora\"label QS:Lth,\"สตรีสาวอ่านหนังสือ\"label QS:Lvi,\"Một cô gái trẻ đang đọc sách\"label QS:Lml,\"എ യംഗ് ഗേൾ റീഡിംഗ്\"label QS:Lnl,\"Een jong meisje leest\"label QS:Lsv,\"Läsande flicka\"label QS:Lka,\"ახალგაზრდა გოგონა კითხულობს\"label QS:Lfa,\"خواندن دختر جوان\"label QS:Lckb,\"کچە کتێبخوێنەکە\"label QS:Len,\"A Young Girl Reading\"label QS:Lar,\"القارئة الحسناء\"label QS:Lel,\"Η νεαρή αναγνώστρια\"label QS:Lmk,\"Читачка\"",
+    "artist": "Jean-Honoré Fragonard",
+    "licence": "Public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:Fragonard,_The_Reader.jpg"
   },
   "math": {
     "title": "Byrne Euclid title page image",
