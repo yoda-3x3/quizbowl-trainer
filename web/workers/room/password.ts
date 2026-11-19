@@ -10,7 +10,7 @@
  * The iterations are embedded so a future bump can keep verifying old hashes.
  */
 
-const ITERATIONS = 210_000;
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
 
