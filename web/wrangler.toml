@@ -22,7 +22,70 @@ database_id = "a2f6f5e8-ed7d-4828-a9c9-5ec64425a0a4"
 migrations_dir = "workers/room/migrations"
 
 # Local dev:   npx wrangler dev
-# Deploy:      npx wrangler deploy
+# Deploy:      npx wrangler deploy (prod)
+#              npx wrangler deploy --env qa    (qa)
+#              npx wrangler deploy --env prev  (prev)
+#              npx wrangler deploy --env dev   (dev)
 #
 # The front end is a separate Cloudflare Pages project serving web/dist.
 # Point it at this Worker with a /api/* route once both are deployed.
+#
+# Environment matrix
+# ------------------
+# | Branch  | Pages URL                           | Worker env | Worker URL                                     |
+# |---------|-------------------------------------|------------|------------------------------------------------|
+# | main    | qb-trainer.pages.dev                | (top)      | quizbowl-rooms.<account>.workers.dev           |
+# | qa      | qa.qb-trainer.pages.dev             | qa         | qa-quizbowl-rooms.<account>.workers.dev        |
+# | preview | preview.qb-trainer.pages.dev        | prev       | prev-quizbowl-rooms.<account>.workers.dev      |
+# | dev     | dev.qb-trainer.pages.dev            | dev        | dev-quizbowl-rooms.<account>.workers.dev       |
+#
+# All envs share the single qb-trainer-auth D1 database for now. Separate
+# databases per environment belong in a follow-up: copy the migrations dir,
+# create new D1s with `wrangler d1 create qb-trainer-auth-<env>`, point each
+# [env.*] block at its own database_id, and reset account/tournament data.
+# Until then, qa/prev/dev writes land in the same table as prod.
+
+# -- qa: release candidate; auto-deploy on push to the `qa` branch -------
+[env.qa]
+name = "qa-quizbowl-rooms"
+[[env.qa.durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+[[env.qa.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+[[env.qa.d1_databases]]
+binding = "DB"
+database_name = "qb-trainer-auth"
+database_id = "a2f6f5e8-ed7d-4828-a9c9-5ec64425a0a4"
+migrations_dir = "workers/room/migrations"
+
+# -- prev: staging / integration ----------------------------------------
+[env.prev]
+name = "prev-quizbowl-rooms"
+[[env.prev.durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+[[env.prev.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+[[env.prev.d1_databases]]
+binding = "DB"
+database_name = "qb-trainer-auth"
+database_id = "a2f6f5e8-ed7d-4828-a9c9-5ec64425a0a4"
+migrations_dir = "workers/room/migrations"
+
+# -- dev: open sandbox, anything goes -----------------------------------
+[env.dev]
+name = "dev-quizbowl-rooms"
+[[env.dev.durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+[[env.dev.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "qb-trainer-auth"
+database_id = "a2f6f5e8-ed7d-4828-a9c9-5ec64425a0a4"
+migrations_dir = "workers/room/migrations"
