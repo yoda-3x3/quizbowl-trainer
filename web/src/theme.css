@@ -783,3 +783,128 @@ input {
   pointer-events: none;
   user-select: none;
 }
+
+/* --- rank badge ----------------------------------------------------------
+   The feudal rank crest. --rank-color is set inline per tier; everything
+   else derives from it with color-mix so one rule covers all eight tiers
+   (Serf..King, plus God). */
+
+.rank-badge--compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rank-color) 18%, var(--panel-2, #1a1d22));
+  border: 1px solid color-mix(in srgb, var(--rank-color) 45%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.rank-badge__glyph {
+  color: var(--rank-color);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.rank-badge__glyph--lg {
+  font-size: 30px;
+}
+
+.rank-badge--card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius, 10px);
+  border: 1px solid color-mix(in srgb, var(--rank-color) 40%, var(--line));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--rank-color) 16%, var(--panel-2, #1a1d22)) 0%,
+    var(--panel-2, #1a1d22) 70%
+  );
+}
+
+.rank-badge__crest {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--rank-color) 55%, white 10%) 0%,
+    color-mix(in srgb, var(--rank-color) 70%, black 20%) 100%
+  );
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rank-color) 50%, transparent);
+}
+
+.rank-badge__crest .rank-badge__glyph--lg {
+  color: #fff;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+
+.rank-badge__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank-badge__name {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.rank-badge__stats {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.rank-badge__progress {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rank-color) 20%, var(--line));
+  overflow: hidden;
+}
+
+.rank-badge__progress-fill {
+  height: 100%;
+  background: var(--rank-color);
+  border-radius: 999px;
+  transition: width var(--dur-fast, 160ms) var(--ease-standard, ease);
+}
+
+/* God: the #1 spot. A slow gold pulse instead of the plain tier gradient, so
+   it reads as a distinct event rather than just "King, but brighter". */
+.rank-badge--god.rank-badge--card {
+  background: linear-gradient(135deg, #3a330f 0%, #1a1d22 75%);
+  animation: rank-god-pulse 2.6s ease-in-out infinite;
+}
+
+.rank-badge--god .rank-badge__crest {
+  background: radial-gradient(circle at 35% 30%, #fff8dd 0%, #d4af37 60%, #8a6d1a 100%);
+}
+
+.rank-badge--god.rank-badge--compact {
+  animation: rank-god-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes rank-god-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in srgb, #d4af37 50%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 14px 2px color-mix(in srgb, #d4af37 65%, transparent);
+  }
+}

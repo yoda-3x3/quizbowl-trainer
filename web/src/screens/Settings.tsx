@@ -41,6 +41,8 @@ import {
 } from '../ui';
 import { THEME_VISUALS } from '../ThemeBackdrop';
 import { useAuth } from '../auth';
+import { useMyRating } from '../rank';
+import RankBadge from '../RankBadge';
 import SignIn from './SignIn';
 import SignUp from './SignUp';
 
@@ -58,6 +60,7 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [authView, setAuthView] = useState<AuthView>('none');
   const auth = useAuth();
+  const myRating = useMyRating(auth.user !== null);
 
   useEffect(() => {
     void cacheCounts().then(setCounts);
@@ -130,6 +133,11 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
                   Signed in as <strong>{auth.user.username}</strong>
                   {auth.user.role === 'admin' ? ' (admin)' : ''}.
                 </p>
+                {myRating.rating ? (
+                  <RankBadge rating={myRating.rating} />
+                ) : myRating.loading ? (
+                  <p className="tiny muted">Loading rank.</p>
+                ) : null}
                 <div className="row">
                   <Button
                     small

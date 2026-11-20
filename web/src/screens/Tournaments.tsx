@@ -19,6 +19,7 @@ import {
   type TournamentSummary,
 } from '../tournaments';
 import TournamentDetail from './TournamentDetail';
+import Leaderboard from './Leaderboard';
 import './Tournaments.css';
 
 type GroupKey = 'open' | 'running' | 'finished';
@@ -42,6 +43,7 @@ export default function Tournaments() {
   const list = useTournamentList();
   const [openId, setOpenId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const byState = useMemo(() => {
     const out: Record<GroupKey, TournamentSummary[]> = {
@@ -67,6 +69,10 @@ export default function Tournaments() {
     );
   }
 
+  if (showLeaderboard) {
+    return <Leaderboard onExit={() => setShowLeaderboard(false)} />;
+  }
+
   const canCreate = auth.user !== null;
 
   return (
@@ -74,6 +80,9 @@ export default function Tournaments() {
       <header className="topbar">
         <h1 className="topbar__title">Tournaments</h1>
         <div className="topbar__right">
+          <Button variant="ghost" small onClick={() => setShowLeaderboard(true)}>
+            Leaderboard
+          </Button>
           <Button variant="ghost" small onClick={() => void list.refresh()}>
             Refresh
           </Button>

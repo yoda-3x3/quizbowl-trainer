@@ -29,6 +29,9 @@
  *   POST /api/admin/packets/:id/remove   -> 404 stub, packets are client-only
  *   GET  /api/admin/protests             -> list protests by state (default pending)
  *   POST /api/admin/protests/:id/resolve -> set a protest's resolution + note
+ *   GET  /api/ratings/me                 -> caller's ELO + rank (signed-in only)
+ *   GET  /api/ratings/:userId             -> a user's ELO + rank (public)
+ *   GET  /api/leaderboard                -> top players by ELO, #1 flagged God
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -40,6 +43,7 @@ import { d1Store, handleAuth, type RequestContext } from './auth';
 import { d1TournamentStore, handleTournaments } from './tournaments';
 import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
 import { d1PacketStore, handlePackets } from './packets';
+import { d1RatingStore, handleRatings } from './ratings';
 
 export { Room };
 
@@ -148,6 +152,19 @@ export default {
         request,
         authStore,
         tStore,
+        contextFrom(request),
+      );
+      if (response) return response;
+    }
+
+    // ELO ratings + leaderboard. Reuses the auth store for session resolution.
+    if (url.pathname.startsWith('/api/ratings') || url.pathname === '/api/leaderboard') {
+      const authStore = d1Store(env.DB);
+      const ratingStore = d1RatingStore(env.DB);
+      const response = await handleRatings(
+        request,
+        authStore,
+        ratingStore,
         contextFrom(request),
       );
       if (response) return response;
