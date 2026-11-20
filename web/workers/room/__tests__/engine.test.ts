@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   abandonQuestion,
   applyJudgement,
+  attachMatch,
   buzz,
   createRoom,
   elapsedAt,
   everyoneLockedOut,
   finishReading,
+  isMatchOver,
   join,
   leave,
   nextQuestion,
@@ -410,5 +412,120 @@ describe('a whole question, end to end', () => {
     const snap = snapshot(s, resumeBase + 9100);
     expect(snap.players[0]?.id).toBe('p2');
     expect(snap.revealed).toBe(WORDS.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bracket H2H match attachment
+// ---------------------------------------------------------------------------
+
+function startMatchRoom(regulationTossups = 2): RoomState {
+  const s = createRoom('7F2K');
+  attachMatch(s, {
+    tournamentId: 1,
+    matchId: 1,
+    entrantAKey: 'u:1',
+    entrantBKey: 'u:2',
+    regulationTossups,
+  });
+  join(s, 'p1', 'Ahalya', T0, 'a');
+  join(s, 'p2', 'Maya', T0, 'b');
+  startQuestion(
+    s,
+    {
+      question: {
+        id: 'q1',
+        words: WORDS,
+        powerIndex: 4,
+        category: 'Science',
+        subcategory: 'Biology',
+        difficulty: 4,
+        setName: 'Test Set',
+      },
+      answerline: '<b><u>mitochondria</u></b>',
+      answerSanitized: 'mitochondria',
+      schedule: SCHEDULE,
+    },
+    T0,
+  );
+  return s;
+}
+
+describe('bracket match attachment', () => {
+  it('is a no-op for an ordinary room', () => {
+    const s = startRoom();
+    expect(s.match).toBeNull();
+    expect(snapshot(s, T0).match).toBeNull();
+    expect(isMatchOver(s)).toBe(false);
+  });
+
+  it('records each player\'s side and never overwrites it with a plain rejoin', () => {
+    const s = startMatchRoom();
+    expect(s.players.p1?.side).toBe('a');
+    expect(s.players.p2?.side).toBe('b');
+    join(s, 'p1', 'Ahalya', T0 + 1000); // rejoin without a side
+    expect(s.players.p1?.side).toBe('a');
+  });
+
+  it('tallies a side win toward sideScores and tossupsPlayed', () => {
+    const s = startMatchRoom();
+    buzz(s, 'p1', T0 + (SCHEDULE[4] as number));
+    applyJudgement(s, 'p1', 'mitochondria', { directive: 'accept' }, T0 + (SCHEDULE[4] as number) + 500);
+
+    expect(s.match?.tossupsPlayed).toBe(1);
+    expect(s.match?.sideScores.a).toBeGreaterThan(0);
+    expect(s.match?.sideScores.b).toBe(0);
+    expect(snapshot(s, T0).match?.sideScores).toEqual(s.match?.sideScores);
+  });
+
+  it('gives the other side credit after a neg, not the negging side', () => {
+    const s = startMatchRoom();
+    const buzzTime = T0 + (SCHEDULE[4] as number);
+    buzz(s, 'p1', buzzTime);
+    applyJudgement(s, 'p1', 'wrong', { directive: 'reject' }, buzzTime + 500);
+    expect(s.phase).toBe('reading'); // p2 can still buzz
+
+    buzz(s, 'p2', buzzTime + 1500);
+    applyJudgement(s, 'p2', 'mitochondria', { directive: 'accept' }, buzzTime + 2000);
+
+    expect(s.match?.tossupsPlayed).toBe(1);
+    expect(s.match?.sideScores.a).toBe(0);
+    expect(s.match?.sideScores.b).toBeGreaterThan(0);
+  });
+
+  it('counts a dead ball as a tossup played with no side score change', () => {
+    const s = startMatchRoom();
+    finishReading(s, T0 + LAST + 1);
+    expect(s.phase).toBe('resolved');
+    expect(s.match?.tossupsPlayed).toBe(1);
+    expect(s.match?.sideScores).toEqual({ a: 0, b: 0 });
+  });
+
+  it('reports over once regulation is reached', () => {
+    const s = startMatchRoom(1);
+    expect(isMatchOver(s)).toBe(false);
+    finishReading(s, T0 + LAST + 1);
+    expect(isMatchOver(s)).toBe(true);
+    expect(snapshot(s, T0 + LAST + 1).match?.over).toBe(true);
+  });
+
+  it('does not credit a score to a player with no side', () => {
+    const s = createRoom('ABCD');
+    attachMatch(s, { tournamentId: 1, matchId: 1, entrantAKey: 'u:1', entrantBKey: 'u:2', regulationTossups: 5 });
+    join(s, 'spectator', 'Nobody', T0); // no side
+    startQuestion(
+      s,
+      {
+        question: { id: 'q1', words: WORDS, powerIndex: null, category: 'x', subcategory: 'x', difficulty: 1, setName: 'x' },
+        answerline: 'answer',
+        answerSanitized: 'answer',
+        schedule: SCHEDULE,
+      },
+      T0,
+    );
+    buzz(s, 'spectator', T0 + (SCHEDULE[2] as number));
+    applyJudgement(s, 'spectator', 'answer', { directive: 'accept' }, T0 + (SCHEDULE[2] as number) + 100);
+    expect(s.match?.tossupsPlayed).toBe(1);
+    expect(s.match?.sideScores).toEqual({ a: 0, b: 0 });
   });
 });

@@ -18,6 +18,7 @@ import Tossup, {
   type TossupSource,
 } from './Tossup';
 import Bonus, { type BonusSource } from './Bonus';
+import BracketPanel from './BracketPanel';
 import {
   pickQuestionIds,
   publicToBonus,
@@ -124,6 +125,12 @@ export default function TournamentDetail({ id, onExit }: TournamentDetailProps) 
           </ul>
         )}
       </Sheet>
+
+      <BracketPanel
+        tournamentId={tournament.id}
+        isCreator={isCreator}
+        tournamentOpen={tournament.state === 'open'}
+      />
 
       {tournament.state === 'open' ? (
         <OpenControls

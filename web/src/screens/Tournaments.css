@@ -250,3 +250,144 @@
   font-style: italic;
   margin: 0;
 }
+
+/* --- leaderboard --------------------------------------------------------- */
+
+.leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.leaderboard__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.leaderboard__row:last-child {
+  border-bottom: none;
+}
+
+.leaderboard__position {
+  flex: 0 0 32px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.leaderboard__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard__elo {
+  flex: 0 0 auto;
+}
+
+/* --- bracket --------------------------------------------------------------
+   A simple round-by-round list rather than a drawn tree: each round is its
+   own column-free block of match rows, which stays legible at phone width
+   without the horizontal scroll a real bracket graphic would need. */
+
+.bracket {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bracket__round-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.bracket__match {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  margin-bottom: 6px;
+}
+
+.bracket__entrant {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.bracket__entrant span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bracket__winner {
+  font-weight: 700;
+  color: var(--accent, #f5c242);
+}
+
+.bracket__vs {
+  font-size: 11px;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+
+.bracket__state {
+  flex: 0 0 auto;
+  text-transform: capitalize;
+}
+
+/* --- H2H match room: side-grouped score header --- */
+
+.h2h__scoreline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.h2h__side {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.h2h__side-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+
+.h2h__side-score {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.h2h__vs {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}

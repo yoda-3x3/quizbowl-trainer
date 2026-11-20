@@ -54,6 +54,21 @@ Environment variables → Preview branch:
 | `preview`| https://prev-quizbowl-rooms.vishruthvikram2029.workers.dev       |
 | `dev`    | https://dev-quizbowl-rooms.vishruthvikram2029.workers.dev        |
 
+## Branch protection
+
+`main` is protected (GitHub classic branch protection, 2026-11-20):
+
+- Pull request required before merge (0 required approvals, so solo
+  work still ships but has to go through a PR).
+- Linear history required — no merge commits, use squash or rebase.
+- Conversation resolution required before merge.
+- Force-push and delete blocked.
+- Admins are **not** enforced (so the repo owner can still fast-forward
+  in a hurry); flip `enforce_admins=true` once the team grows.
+
+The repo had to go **public** for GitHub to unlock protection on the
+free plan.
+
 ## Future work (not done yet)
 
 1. **Separate D1 per environment.** Run
@@ -63,5 +78,5 @@ Environment variables → Preview branch:
 2. **Env indicator banner.** Replace the `pre-alpha` badge with an env badge
    that reads a `VITE_ENV` constant and shows `DEV` / `PREV` / `QA` on
    non-prod. Keep `pre-alpha` on prod until launch.
-3. **GitHub branch protection.** Require PR + green CI to push to `main`,
-   so prod can only move forward through the flow above.
+3. **Required status checks.** Once CI is wired up, add the test-job name
+   to `required_status_checks.contexts` so PRs can't merge red.
