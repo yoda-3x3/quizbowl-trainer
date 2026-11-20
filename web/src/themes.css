@@ -134,9 +134,28 @@
   --ink: #1b1a16;
   --ink-soft: #6b5a3e;
   --accent: #c0362b;
+  /* Semantic tones retuned for a cream background. The defaults are tuned
+     for dark panels and wash out on light cream (gold 1.29:1, soft red
+     2.57:1 against --panel-2). Dark amber and deeper reds keep the same
+     meaning while clearing WCAG AA at the pill sizes used. --good gets a
+     darker forest green for the same reason. --gold-dim stays close to
+     --line so dim-underline accents still read as a subtle rule. */
+  --good: #2b7a3f;
+  --bad: #a01818;
+  --gold: #8a6a1a;
+  --gold-dim: #a68f4a;
   --display-font: 'Spectral', Georgia, 'Iowan Old Style', serif;
   --text-font: 'Spectral', Georgia, 'Iowan Old Style', serif;
   color-scheme: light;
+}
+
+/* --btn-primary text is hardcoded dark navy for visibility on the default
+   light-blue accent. Math's accent is a deep crimson, where navy fails
+   contrast (2.88:1). Flip to cream in math only. Lesson nodes carry the
+   same navy-on-accent pattern and need the same flip. */
+.app[data-theme='math'] .btn--primary,
+.app[data-theme='math'] .lesson-node--available .lesson-node__btn {
+  color: var(--panel);
 }
 
 /* ---------------------------------------------------------------------------
