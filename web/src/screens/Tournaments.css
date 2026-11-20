@@ -290,3 +290,66 @@
 .leaderboard__elo {
   flex: 0 0 auto;
 }
+
+/* --- bracket --------------------------------------------------------------
+   A simple round-by-round list rather than a drawn tree: each round is its
+   own column-free block of match rows, which stays legible at phone width
+   without the horizontal scroll a real bracket graphic would need. */
+
+.bracket {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bracket__round-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.bracket__match {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 8px);
+  margin-bottom: 6px;
+}
+
+.bracket__entrant {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.bracket__entrant span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bracket__winner {
+  font-weight: 700;
+  color: var(--accent, #f5c242);
+}
+
+.bracket__vs {
+  font-size: 11px;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+
+.bracket__state {
+  flex: 0 0 auto;
+  text-transform: capitalize;
+}

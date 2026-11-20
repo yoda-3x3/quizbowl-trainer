@@ -32,6 +32,10 @@
  *   GET  /api/ratings/me                 -> caller's ELO + rank (signed-in only)
  *   GET  /api/ratings/:userId             -> a user's ELO + rank (public)
  *   GET  /api/leaderboard                -> top players by ELO, #1 flagged God
+ *   GET  /api/tournaments/:id/bracket     -> bracket state (config + rounds)
+ *   POST /api/tournaments/:id/bracket     -> TD seeds the bracket (open tournaments only)
+ *   POST /api/tournaments/:id/bracket/matches/:matchId/result  -> TD records a winner
+ *   POST /api/tournaments/:id/bracket/matches/:matchId/confirm -> TD confirms advance (manual mode)
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -44,6 +48,7 @@ import { d1TournamentStore, handleTournaments } from './tournaments';
 import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
 import { d1PacketStore, handlePackets } from './packets';
 import { d1RatingStore, handleRatings } from './ratings';
+import { d1BracketStore, handleBrackets } from './brackets';
 
 export { Room };
 
@@ -139,6 +144,25 @@ export default {
         request,
         authStore,
         packetStore,
+        contextFrom(request),
+      );
+      if (response) return response;
+    }
+
+    // Bracket endpoints. Mounted ahead of the generic tournaments dispatch so
+    // /api/tournaments/:id/bracket* is claimed before that dispatch's own
+    // depth check would 404 it.
+    if (url.pathname.startsWith('/api/tournaments/')) {
+      const authStore = d1Store(env.DB);
+      const tStore = d1TournamentStore(env.DB);
+      const bStore = d1BracketStore(env.DB);
+      const ratingStore = d1RatingStore(env.DB);
+      const response = await handleBrackets(
+        request,
+        authStore,
+        tStore,
+        bStore,
+        ratingStore,
         contextFrom(request),
       );
       if (response) return response;
