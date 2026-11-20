@@ -20,6 +20,9 @@ import {
   type BracketMatch,
   type SeedingMode,
 } from '../brackets';
+import { openMatchRoom } from '../h2h';
+import H2HMatchRoom from './H2HMatchRoom';
+import type { Side } from '../../workers/room/protocol';
 import './Tournaments.css';
 
 export interface BracketPanelProps {
@@ -28,8 +31,27 @@ export interface BracketPanelProps {
   tournamentOpen: boolean;
 }
 
+interface ActiveRoom {
+  code: string;
+  side: Side | null;
+}
+
 export default function BracketPanel({ tournamentId, isCreator, tournamentOpen }: BracketPanelProps) {
   const handle = useBracket(tournamentId);
+  const [activeRoom, setActiveRoom] = useState<ActiveRoom | null>(null);
+
+  if (activeRoom) {
+    return (
+      <H2HMatchRoom
+        roomCode={activeRoom.code}
+        side={activeRoom.side}
+        onExit={() => {
+          setActiveRoom(null);
+          void handle.refresh();
+        }}
+      />
+    );
+  }
 
   if (handle.loading && !handle.bracket) {
     return null;
@@ -56,6 +78,7 @@ export default function BracketPanel({ tournamentId, isCreator, tournamentOpen }
                 tournamentId={tournamentId}
                 isCreator={isCreator}
                 onChanged={() => void handle.refresh()}
+                onJoin={(code, side) => setActiveRoom({ code, side })}
               />
             ))}
           </div>
@@ -70,11 +93,13 @@ function MatchRow({
   tournamentId,
   isCreator,
   onChanged,
+  onJoin,
 }: {
   match: BracketMatch;
   tournamentId: number;
   isCreator: boolean;
   onChanged(): void;
+  onJoin(roomCode: string, side: Side | null): void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +132,21 @@ function MatchRow({
     }
   };
 
+  const join = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await openMatchRoom(tournamentId, match.id);
+      onJoin(result.room_code, result.side);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to open match room');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const canPick = isCreator && match.state === 'ready' && match.entrant_a && match.entrant_b;
+  const canJoin = match.state === 'ready' && match.entrant_a && match.entrant_b;
 
   return (
     <div className="bracket__match">
@@ -132,6 +171,11 @@ function MatchRow({
           </Button>
         ) : null}
       </div>
+      {canJoin ? (
+        <Button small variant="primary" onClick={() => void join()} disabled={busy}>
+          Join match
+        </Button>
+      ) : null}
       {match.state === 'awaiting_confirm' && isCreator ? (
         <Button small variant="primary" onClick={() => void confirm()} disabled={busy}>
           Confirm advance

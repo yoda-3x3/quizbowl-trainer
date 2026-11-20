@@ -31,6 +31,7 @@ import {
   recordMatchResult,
   type RatingStore,
 } from './ratings';
+import { makeRoomCode } from './protocol';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -46,6 +47,8 @@ export interface BracketConfigRow {
   advanceMode: AdvanceMode;
   eloMin: number | null;
   eloMax: number | null;
+  /** How many tossups an H2H match room plays before reporting a winner. */
+  regulationTossups: number;
   createdAt: number;
 }
 
@@ -62,6 +65,8 @@ export interface BracketMatchRow {
   state: MatchState;
   createdAt: number;
   finishedAt: number | null;
+  /** Set once "open match room" has allocated a Room DO for this match. */
+  roomCode: string | null;
 }
 
 export type NewBracketMatch = Omit<BracketMatchRow, 'id'>;
@@ -74,6 +79,29 @@ export interface MatchPatch {
   winnerKey?: string | null;
   state?: MatchState;
   finishedAt?: number | null;
+  roomCode?: string | null;
+}
+
+export const REGULATION_TOSSUPS_DEFAULT = 20;
+export const REGULATION_TOSSUPS_MIN = 1;
+export const REGULATION_TOSSUPS_MAX = 50;
+
+/**
+ * Bridges to the Room DO so this module stays decoupled from Durable Object
+ * specifics, the same way admin.ts's `RoomCloser` bridges room closing.
+ * index.ts builds the real implementation; tests pass a plain spy.
+ */
+export interface MatchRoomOpener {
+  attach(
+    code: string,
+    info: {
+      tournamentId: number;
+      matchId: number;
+      entrantAKey: string;
+      entrantBKey: string;
+      regulationTossups: number;
+    },
+  ): Promise<void>;
 }
 
 /**
@@ -123,6 +151,7 @@ function rowToConfig(row: Record<string, unknown>): BracketConfigRow {
     advanceMode: advanceModeOf(row.advance_mode),
     eloMin: numOrNull(row.elo_min),
     eloMax: numOrNull(row.elo_max),
+    regulationTossups: row.regulation_tossups == null ? REGULATION_TOSSUPS_DEFAULT : num(row.regulation_tossups),
     createdAt: num(row.created_at),
   };
 }
@@ -141,6 +170,7 @@ function rowToMatch(row: Record<string, unknown>): BracketMatchRow {
     state: matchStateOf(row.state),
     createdAt: num(row.created_at),
     finishedAt: numOrNull(row.finished_at),
+    roomCode: strOrNull(row.room_code),
   };
 }
 
@@ -150,7 +180,8 @@ export function d1BracketStore(db: D1Database): BracketStore {
     async getConfig(tournamentId) {
       const row = await db
         .prepare(
-          `SELECT tournament_id, seeding_mode, advance_mode, elo_min, elo_max, created_at
+          `SELECT tournament_id, seeding_mode, advance_mode, elo_min, elo_max,
+                  regulation_tossups, created_at
              FROM tournament_brackets WHERE tournament_id = ?`,
         )
         .bind(tournamentId)
@@ -162,10 +193,10 @@ export function d1BracketStore(db: D1Database): BracketStore {
       await db
         .prepare(
           `INSERT INTO tournament_brackets
-             (tournament_id, seeding_mode, advance_mode, elo_min, elo_max, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+             (tournament_id, seeding_mode, advance_mode, elo_min, elo_max, regulation_tossups, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(c.tournamentId, c.seedingMode, c.advanceMode, c.eloMin, c.eloMax, c.createdAt)
+        .bind(c.tournamentId, c.seedingMode, c.advanceMode, c.eloMin, c.eloMax, c.regulationTossups, c.createdAt)
         .run();
     },
 
@@ -175,8 +206,8 @@ export function d1BracketStore(db: D1Database): BracketStore {
           .prepare(
             `INSERT INTO bracket_matches
                (tournament_id, round, slot, entrant_a_key, entrant_a_label,
-                entrant_b_key, entrant_b_label, winner_key, state, created_at, finished_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                entrant_b_key, entrant_b_label, winner_key, state, created_at, finished_at, room_code)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             r.tournamentId,
@@ -190,6 +221,7 @@ export function d1BracketStore(db: D1Database): BracketStore {
             r.state,
             r.createdAt,
             r.finishedAt,
+            r.roomCode,
           )
           .run();
       }
@@ -199,7 +231,8 @@ export function d1BracketStore(db: D1Database): BracketStore {
       const res = await db
         .prepare(
           `SELECT id, tournament_id, round, slot, entrant_a_key, entrant_a_label,
-                  entrant_b_key, entrant_b_label, winner_key, state, created_at, finished_at
+                  entrant_b_key, entrant_b_label, winner_key, state, created_at, finished_at,
+                  room_code
              FROM bracket_matches
              WHERE tournament_id = ?
              ORDER BY round ASC, slot ASC`,
@@ -240,6 +273,10 @@ export function d1BracketStore(db: D1Database): BracketStore {
       if ('finishedAt' in patch) {
         sets.push('finished_at = ?');
         values.push(patch.finishedAt ?? null);
+      }
+      if ('roomCode' in patch) {
+        sets.push('room_code = ?');
+        values.push(patch.roomCode ?? null);
       }
       if (sets.length === 0) return;
       values.push(id);
@@ -437,6 +474,7 @@ export function generateBracket(
       state: isBye ? 'finished' : a && b ? 'ready' : 'pending',
       createdAt: now,
       finishedAt: isBye ? now : null,
+      roomCode: null,
     });
   }
 
@@ -456,6 +494,7 @@ export function generateBracket(
         state: 'pending',
         createdAt: now,
         finishedAt: null,
+        roomCode: null,
       });
     }
   }
@@ -499,6 +538,7 @@ export interface BracketMatchPublic {
   entrant_b: { key: string; label: string } | null;
   winner_key: string | null;
   state: MatchState;
+  room_code: string | null;
 }
 
 export interface BracketPublic {
@@ -506,6 +546,7 @@ export interface BracketPublic {
   advance_mode: AdvanceMode;
   elo_min: number | null;
   elo_max: number | null;
+  regulation_tossups: number;
   rounds: Array<{ round: number; matches: BracketMatchPublic[] }>;
 }
 
@@ -518,6 +559,7 @@ function toMatchPublic(m: BracketMatchRow): BracketMatchPublic {
     entrant_b: m.entrantBKey ? { key: m.entrantBKey, label: m.entrantBLabel ?? '' } : null,
     winner_key: m.winnerKey,
     state: m.state,
+    room_code: m.roomCode,
   };
 }
 
@@ -536,6 +578,7 @@ function toBracketPublic(config: BracketConfigRow, matches: BracketMatchRow[]): 
     advance_mode: config.advanceMode,
     elo_min: config.eloMin,
     elo_max: config.eloMax,
+    regulation_tossups: config.regulationTossups,
     rounds,
   };
 }
@@ -577,6 +620,7 @@ interface CreateBracketBody {
   elo_min?: unknown;
   elo_max?: unknown;
   manual_seeds?: unknown;
+  regulation_tossups?: unknown;
 }
 
 async function handleCreateBracket(
@@ -610,6 +654,19 @@ async function handleCreateBracket(
   }
   if (eloMax !== null && !Number.isFinite(eloMax)) {
     return json({ error: 'elo_max must be a number' }, 400);
+  }
+  const rawRegulation = body.regulation_tossups;
+  const regulationTossups =
+    rawRegulation == null || rawRegulation === '' ? REGULATION_TOSSUPS_DEFAULT : Number(rawRegulation);
+  if (
+    !Number.isInteger(regulationTossups) ||
+    regulationTossups < REGULATION_TOSSUPS_MIN ||
+    regulationTossups > REGULATION_TOSSUPS_MAX
+  ) {
+    return json(
+      { error: `regulation_tossups must be an integer from ${REGULATION_TOSSUPS_MIN} to ${REGULATION_TOSSUPS_MAX}` },
+      400,
+    );
   }
 
   const players = await tStore.listPlayers(tournamentId);
@@ -667,6 +724,7 @@ async function handleCreateBracket(
     advanceMode,
     eloMin,
     eloMax,
+    regulationTossups,
     createdAt: ctx.now,
   });
   await bStore.createMatches(matches);
@@ -867,6 +925,90 @@ async function handleConfirm(
   return json({ match: toMatchPublic(result.match) }, 200);
 }
 
+/**
+ * Resolves which side (if any) `userId` plays on for a match's entrant. Solo
+ * entrants (`u:<id>`) compare directly; team entrants (`t:<name>`) check
+ * current tournament_players rows for that exact team name, mirroring how
+ * `buildEntrants` grouped them at seed time.
+ */
+async function sideFor(
+  tStore: TournamentStore,
+  tournamentId: number,
+  match: BracketMatchRow,
+  userId: number,
+): Promise<'a' | 'b' | null> {
+  const isMember = async (key: string | null): Promise<boolean> => {
+    if (!key) return false;
+    const solo = /^u:(\d+)$/.exec(key);
+    if (solo && solo[1] !== undefined) return Number(solo[1]) === userId;
+    const team = /^t:(.+)$/.exec(key);
+    if (!team || team[1] === undefined) return false;
+    const players = await tStore.listPlayers(tournamentId);
+    return players.some((p) => p.userId === userId && p.team.trim() === team[1]);
+  };
+  if (await isMember(match.entrantAKey)) return 'a';
+  if (await isMember(match.entrantBKey)) return 'b';
+  return null;
+}
+
+interface OpenRoomResult {
+  room_code: string;
+  side: 'a' | 'b' | null;
+}
+
+async function handleOpenMatchRoom(
+  request: Request,
+  authStore: AuthStore,
+  tStore: TournamentStore,
+  bStore: BracketStore,
+  opener: MatchRoomOpener,
+  ctx: RequestContext,
+  tournamentId: number,
+  matchId: number,
+): Promise<Response> {
+  const me = await requireUser(request, authStore, ctx.now);
+  if (!me) return json({ error: 'not signed in' }, 401);
+
+  const t = await tStore.findTournament(tournamentId);
+  if (!t) return json({ error: 'not found' }, 404);
+
+  const matches = await bStore.listMatches(tournamentId);
+  const match = matches.find((m) => m.id === matchId);
+  if (!match) return json({ error: 'match not found' }, 404);
+
+  const side = await sideFor(tStore, tournamentId, match, me.id);
+  const isTd = me.role === 'admin' || me.id === t.createdBy;
+  if (side === null && !isTd) {
+    return json({ error: 'only match participants or the TD can open this room' }, 403);
+  }
+  if (match.state !== 'ready') {
+    return json({ error: `match is not ready to play (state: ${match.state})` }, 400);
+  }
+
+  if (match.roomCode) {
+    const result: OpenRoomResult = { room_code: match.roomCode, side };
+    return json(result, 200);
+  }
+  if (!match.entrantAKey || !match.entrantBKey) {
+    return json({ error: 'match has no entrants yet' }, 400);
+  }
+
+  const config = await bStore.getConfig(tournamentId);
+  const regulationTossups = config?.regulationTossups ?? REGULATION_TOSSUPS_DEFAULT;
+  const code = makeRoomCode();
+  await bStore.updateMatch(match.id, { roomCode: code });
+  await opener.attach(code, {
+    tournamentId,
+    matchId,
+    entrantAKey: match.entrantAKey,
+    entrantBKey: match.entrantBKey,
+    regulationTossups,
+  });
+
+  const result: OpenRoomResult = { room_code: code, side };
+  return json(result, 200);
+}
+
 // ---------------------------------------------------------------------------
 // Dispatch
 // ---------------------------------------------------------------------------
@@ -882,6 +1024,12 @@ function parseId(raw: string): number | null {
  * so the caller falls through — crucially, mounted ahead of
  * handleTournaments, which would otherwise 404 these deeper paths itself.
  */
+const NOOP_ROOM_OPENER: MatchRoomOpener = {
+  async attach() {
+    /* no-op default for callers (mainly tests) that don't need real rooms */
+  },
+};
+
 export async function handleBrackets(
   request: Request,
   authStore: AuthStore,
@@ -889,6 +1037,7 @@ export async function handleBrackets(
   bStore: BracketStore,
   ratingStore: RatingStore,
   ctx: RequestContext,
+  opener: MatchRoomOpener = NOOP_ROOM_OPENER,
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -918,6 +1067,9 @@ export async function handleBrackets(
     }
     if (action === 'confirm') {
       return handleConfirm(request, authStore, tStore, bStore, ratingStore, ctx, tournamentId, matchId);
+    }
+    if (action === 'room') {
+      return handleOpenMatchRoom(request, authStore, tStore, bStore, opener, ctx, tournamentId, matchId);
     }
   }
 

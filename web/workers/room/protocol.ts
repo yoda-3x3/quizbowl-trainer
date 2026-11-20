@@ -20,6 +20,9 @@ export const IDLE_TEARDOWN_MS = 30 * 60 * 1000;
 
 export type RoomPhase = 'lobby' | 'reading' | 'buzzed' | 'resolved';
 
+/** Which side of an H2H bracket match a player is on. Unset in an ordinary room. */
+export type Side = 'a' | 'b';
+
 export interface PlayerView {
   id: string;
   name: string;
@@ -27,6 +30,24 @@ export interface PlayerView {
   connected: boolean;
   /** Already negged this question, so cannot buzz again on it. */
   lockedOut: boolean;
+  /** Set only in a room attached to a bracket match (see `attachMatch`). */
+  side?: Side;
+}
+
+/**
+ * Present only on a room attached to a bracket match (see workers/room/
+ * brackets.ts). Side scores are aggregated here so an H2H match plays like an
+ * ordinary room (same buzz-lockout engine, same scoring) while still
+ * resolving to a single side-vs-side winner for the bracket.
+ */
+export interface MatchSnapshot {
+  tournamentId: number;
+  matchId: number;
+  regulationTossups: number;
+  tossupsPlayed: number;
+  sideScores: { a: number; b: number };
+  /** True once `tossupsPlayed` reaches `regulationTossups`. */
+  over: boolean;
 }
 
 /** The question as the room sees it. The answer is never sent while reading. */
@@ -69,6 +90,8 @@ export interface RoomSnapshot {
     points: number;
     powered: boolean;
   } | null;
+  /** Null for an ordinary ad-hoc room; set for a bracket H2H match room. */
+  match: MatchSnapshot | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +99,7 @@ export interface RoomSnapshot {
 // ---------------------------------------------------------------------------
 
 export type ClientMessage =
-  | { t: 'join'; name: string; playerId?: string }
+  | { t: 'join'; name: string; playerId?: string; side?: Side }
   | { t: 'start' }
   | { t: 'buzz' }
   | { t: 'answer'; given: string }

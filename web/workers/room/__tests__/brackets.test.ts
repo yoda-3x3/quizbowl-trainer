@@ -39,6 +39,7 @@ import {
   type BracketStore,
   type Entrant,
   type MatchPatch,
+  type MatchRoomOpener,
   type NewBracketMatch,
 } from '../brackets';
 import { type RatingRow, type RatingStore } from '../ratings';
@@ -404,11 +405,11 @@ describe('recordBracketMatchResult', () => {
   it('auto-advances and rates a solo 1v1 match', async () => {
     const bStore = new MemoryBracketStore();
     const ratingStore = new MemoryRatingStore();
-    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'auto', eloMin: null, eloMax: null, createdAt: NOW });
+    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'auto', eloMin: null, eloMax: null, regulationTossups: 20, createdAt: NOW });
     await bStore.createMatches([
-      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 'u:1', entrantALabel: 'p1', entrantBKey: 'u:2', entrantBLabel: 'p2', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null },
-      { tournamentId: 1, round: 1, slot: 1, entrantAKey: 'u:3', entrantALabel: 'p3', entrantBKey: 'u:4', entrantBLabel: 'p4', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null },
-      { tournamentId: 1, round: 2, slot: 0, entrantAKey: null, entrantALabel: null, entrantBKey: null, entrantBLabel: null, winnerKey: null, state: 'pending', createdAt: NOW, finishedAt: null },
+      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 'u:1', entrantALabel: 'p1', entrantBKey: 'u:2', entrantBLabel: 'p2', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null, roomCode: null },
+      { tournamentId: 1, round: 1, slot: 1, entrantAKey: 'u:3', entrantALabel: 'p3', entrantBKey: 'u:4', entrantBLabel: 'p4', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null, roomCode: null },
+      { tournamentId: 1, round: 2, slot: 0, entrantAKey: null, entrantALabel: null, entrantBKey: null, entrantBLabel: null, winnerKey: null, state: 'pending', createdAt: NOW, finishedAt: null, roomCode: null },
     ]);
     const matches = await bStore.listMatches(1);
     const slot0 = matches[0]!;
@@ -431,10 +432,10 @@ describe('recordBracketMatchResult', () => {
   it('parks the result in awaiting_confirm for manual advance mode', async () => {
     const bStore = new MemoryBracketStore();
     const ratingStore = new MemoryRatingStore();
-    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'manual', eloMin: null, eloMax: null, createdAt: NOW });
+    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'manual', eloMin: null, eloMax: null, regulationTossups: 20, createdAt: NOW });
     await bStore.createMatches([
-      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 'u:1', entrantALabel: 'p1', entrantBKey: 'u:2', entrantBLabel: 'p2', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null },
-      { tournamentId: 1, round: 2, slot: 0, entrantAKey: null, entrantALabel: null, entrantBKey: null, entrantBLabel: null, winnerKey: null, state: 'pending', createdAt: NOW, finishedAt: null },
+      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 'u:1', entrantALabel: 'p1', entrantBKey: 'u:2', entrantBLabel: 'p2', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null, roomCode: null },
+      { tournamentId: 1, round: 2, slot: 0, entrantAKey: null, entrantALabel: null, entrantBKey: null, entrantBLabel: null, winnerKey: null, state: 'pending', createdAt: NOW, finishedAt: null, roomCode: null },
     ]);
     const [match] = await bStore.listMatches(1);
 
@@ -457,9 +458,9 @@ describe('recordBracketMatchResult', () => {
   it('rejects a winner_key that is not one of the match entrants', async () => {
     const bStore = new MemoryBracketStore();
     const ratingStore = new MemoryRatingStore();
-    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'auto', eloMin: null, eloMax: null, createdAt: NOW });
+    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'auto', eloMin: null, eloMax: null, regulationTossups: 20, createdAt: NOW });
     await bStore.createMatches([
-      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 'u:1', entrantALabel: 'p1', entrantBKey: 'u:2', entrantBLabel: 'p2', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null },
+      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 'u:1', entrantALabel: 'p1', entrantBKey: 'u:2', entrantBLabel: 'p2', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null, roomCode: null },
     ]);
     const [match] = await bStore.listMatches(1);
     const result = await recordBracketMatchResult(bStore, ratingStore, 1, match!.id, 'u:999', NOW);
@@ -469,9 +470,9 @@ describe('recordBracketMatchResult', () => {
   it('does not rate a team match', async () => {
     const bStore = new MemoryBracketStore();
     const ratingStore = new MemoryRatingStore();
-    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'auto', eloMin: null, eloMax: null, createdAt: NOW });
+    await bStore.createConfig({ tournamentId: 1, seedingMode: 'manual', advanceMode: 'auto', eloMin: null, eloMax: null, regulationTossups: 20, createdAt: NOW });
     await bStore.createMatches([
-      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 't:Alpha', entrantALabel: 'Alpha', entrantBKey: 't:Beta', entrantBLabel: 'Beta', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null },
+      { tournamentId: 1, round: 1, slot: 0, entrantAKey: 't:Alpha', entrantALabel: 'Alpha', entrantBKey: 't:Beta', entrantBLabel: 'Beta', winnerKey: null, state: 'ready', createdAt: NOW, finishedAt: null, roomCode: null },
     ]);
     const [match] = await bStore.listMatches(1);
     const result = await recordBracketMatchResult(bStore, ratingStore, 1, match!.id, 't:Alpha', NOW);
@@ -626,5 +627,131 @@ describe('handleBrackets', () => {
     const championUserId = Number(championKey.split(':')[1]);
     const championRating = await w.ratingStore.getRating(championUserId);
     expect(championRating?.wins).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Open match room (H2H linkage)
+// ---------------------------------------------------------------------------
+
+class SpyOpener implements MatchRoomOpener {
+  public calls: Array<{ code: string; info: Record<string, unknown> }> = [];
+  async attach(code: string, info: Record<string, unknown>): Promise<void> {
+    this.calls.push({ code, info });
+  }
+}
+
+describe('handleOpenMatchRoom', () => {
+  it('requires sign-in', async () => {
+    const w = await seedOpenTournament(1);
+    const res = await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket/matches/1/room`),
+      w.authStore,
+      w.tStore,
+      w.bStore,
+      w.ratingStore,
+      ctx(),
+      new SpyOpener(),
+    );
+    expect(res?.status).toBe(401);
+  });
+
+  it('opens a room for a participant and tells them their side', async () => {
+    const w = await seedOpenTournament(1);
+    const manualSeeds = [w.hostId, ...w.playerIds].map((id) => `u:${id}`);
+    const opener = new SpyOpener();
+    await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket`, { seeding_mode: 'manual', manual_seeds: manualSeeds }, w.hostCookie),
+      w.authStore,
+      w.tStore,
+      w.bStore,
+      w.ratingStore,
+      ctx(),
+      opener,
+    );
+    const bracketMatches = await w.bStore.listMatches(w.tournamentId);
+    const match = bracketMatches.find((m) => m.round === 1)!;
+
+    const res = await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket/matches/${match.id}/room`, {}, w.hostCookie),
+      w.authStore,
+      w.tStore,
+      w.bStore,
+      w.ratingStore,
+      ctx(),
+      opener,
+    );
+    expect(res?.status).toBe(200);
+    const body = (await res?.json()) as { room_code: string; side: 'a' | 'b' | null };
+    expect(body.room_code).toHaveLength(4);
+    expect(body.side).toBe('a'); // host is entrant A (seed 1)
+    expect(opener.calls).toHaveLength(1);
+    expect(opener.calls[0]?.info.tournamentId).toBe(w.tournamentId);
+    expect(opener.calls[0]?.info.regulationTossups).toBe(20);
+  });
+
+  it('reuses the same room code on a second request', async () => {
+    const w = await seedOpenTournament(1);
+    const manualSeeds = [w.hostId, ...w.playerIds].map((id) => `u:${id}`);
+    const opener = new SpyOpener();
+    await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket`, { seeding_mode: 'manual', manual_seeds: manualSeeds }, w.hostCookie),
+      w.authStore, w.tStore, w.bStore, w.ratingStore, ctx(), opener,
+    );
+    const match = (await w.bStore.listMatches(w.tournamentId)).find((m) => m.round === 1)!;
+
+    const first = await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket/matches/${match.id}/room`, {}, w.hostCookie),
+      w.authStore, w.tStore, w.bStore, w.ratingStore, ctx(), opener,
+    );
+    const second = await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket/matches/${match.id}/room`, {}, w.hostCookie),
+      w.authStore, w.tStore, w.bStore, w.ratingStore, ctx(), opener,
+    );
+    const firstBody = (await first?.json()) as { room_code: string };
+    const secondBody = (await second?.json()) as { room_code: string };
+    expect(secondBody.room_code).toBe(firstBody.room_code);
+    expect(opener.calls).toHaveLength(1); // only attached once
+  });
+
+  it('refuses a non-participant who is not the TD', async () => {
+    const w = await seedOpenTournament(3);
+    const manualSeeds = [w.hostId, ...w.playerIds].map((id) => `u:${id}`);
+    await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket`, { seeding_mode: 'manual', manual_seeds: manualSeeds }, w.hostCookie),
+      w.authStore, w.tStore, w.bStore, w.ratingStore, ctx(),
+    );
+    const matches = await w.bStore.listMatches(w.tournamentId);
+    // Round 1 slot 1 is player1 vs player2 (host is seed 1, playing in slot 0).
+    const otherMatch = matches.find((m) => m.round === 1 && m.slot === 1)!;
+
+    const res = await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket/matches/${otherMatch.id}/room`, {}, w.playerCookies[2]),
+      w.authStore,
+      w.tStore,
+      w.bStore,
+      w.ratingStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(403);
+  });
+
+  it('refuses to open a room for a match that is not ready', async () => {
+    const w = await seedOpenTournament(3);
+    const manualSeeds = [w.hostId, ...w.playerIds].map((id) => `u:${id}`);
+    await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket`, { seeding_mode: 'manual', manual_seeds: manualSeeds }, w.hostCookie),
+      w.authStore, w.tStore, w.bStore, w.ratingStore, ctx(),
+    );
+    const pendingMatch = (await w.bStore.listMatches(w.tournamentId)).find((m) => m.round === 2)!;
+    const res = await handleBrackets(
+      req('POST', `/api/tournaments/${w.tournamentId}/bracket/matches/${pendingMatch.id}/room`, {}, w.hostCookie),
+      w.authStore,
+      w.tStore,
+      w.bStore,
+      w.ratingStore,
+      ctx(),
+    );
+    expect(res?.status).toBe(400);
   });
 });

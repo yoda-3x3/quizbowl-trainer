@@ -353,3 +353,41 @@
   flex: 0 0 auto;
   text-transform: capitalize;
 }
+
+/* --- H2H match room: side-grouped score header --- */
+
+.h2h__scoreline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.h2h__side {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.h2h__side-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+
+.h2h__side-score {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.h2h__vs {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}

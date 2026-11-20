@@ -17,6 +17,7 @@ import type {
   ClientMessage,
   RoomSnapshot,
   ServerMessage,
+  Side,
 } from '../../workers/room/protocol';
 
 const PLAYER_ID_KEY = 'qb.playerId';
@@ -80,6 +81,8 @@ export class RoomClient {
     private readonly code: string,
     private readonly name: string,
     private readonly events: Partial<RoomClientEvents> = {},
+    /** Only meaningful for a room opened via brackets.ts's H2H linkage. */
+    private readonly side?: Side,
   ) {}
 
   /** The server's idea of "now", as best this client can tell. */
@@ -119,7 +122,12 @@ export class RoomClient {
     ws.addEventListener('open', () => {
       this.attempts = 0;
       this.events.connection?.('connected');
-      this.send({ t: 'join', name: this.name, ...(this.playerId ? { playerId: this.playerId } : {}) });
+      this.send({
+        t: 'join',
+        name: this.name,
+        ...(this.playerId ? { playerId: this.playerId } : {}),
+        ...(this.side ? { side: this.side } : {}),
+      });
       this.startPinging();
     });
 

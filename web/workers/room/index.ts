@@ -36,6 +36,7 @@
  *   POST /api/tournaments/:id/bracket     -> TD seeds the bracket (open tournaments only)
  *   POST /api/tournaments/:id/bracket/matches/:matchId/result  -> TD records a winner
  *   POST /api/tournaments/:id/bracket/matches/:matchId/confirm -> TD confirms advance (manual mode)
+ *   POST /api/tournaments/:id/bracket/matches/:matchId/room    -> open/rejoin this match's H2H room
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -48,7 +49,7 @@ import { d1TournamentStore, handleTournaments } from './tournaments';
 import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
 import { d1PacketStore, handlePackets } from './packets';
 import { d1RatingStore, handleRatings } from './ratings';
-import { d1BracketStore, handleBrackets } from './brackets';
+import { d1BracketStore, handleBrackets, type MatchRoomOpener } from './brackets';
 
 export { Room };
 
@@ -71,6 +72,27 @@ function roomCloserFor(env: Env): RoomCloser {
       await stub.fetch('https://do/__internal/close', {
         method: 'POST',
         headers: { 'x-internal-secret': env.INTERNAL_SECRET ?? '' },
+      });
+    },
+  };
+}
+
+/**
+ * Bridges brackets.ts's "open a match room" endpoint to the Room DO, the
+ * same way `roomCloserFor` bridges admin's room closing — brackets.ts stays
+ * decoupled from Durable Object specifics.
+ */
+function matchRoomOpenerFor(env: Env): MatchRoomOpener {
+  return {
+    async attach(code, info): Promise<void> {
+      const stub = env.ROOM.get(env.ROOM.idFromName(code));
+      await stub.fetch('https://do/__internal/attach-match', {
+        method: 'POST',
+        headers: {
+          'x-internal-secret': env.INTERNAL_SECRET ?? '',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ code, ...info }),
       });
     },
   };
@@ -164,6 +186,7 @@ export default {
         bStore,
         ratingStore,
         contextFrom(request),
+        matchRoomOpenerFor(env),
       );
       if (response) return response;
     }
