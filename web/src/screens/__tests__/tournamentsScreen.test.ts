@@ -37,7 +37,10 @@ describe('Tournaments hub', () => {
   it('renders the title and a loading list without touching the network', () => {
     const html = renderQuietly(createElement(Tournaments));
     expect(html).toContain('Tournaments');
-    expect(html).toContain('Open and running');
+    // The list groups rendered on first paint: Register (open), Watch live
+    // (running) and Finished. loading state renders inside a sheet before
+    // the groups appear.
+    expect(html).toContain('loading');
     // Anonymous initial state: the sign-in prompt is visible.
     expect(html).toContain('Sign in to host');
   });

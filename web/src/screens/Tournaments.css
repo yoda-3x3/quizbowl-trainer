@@ -1,0 +1,252 @@
+/**
+ * Tournaments screen styles. OWNED FILE.
+ *
+ * The list groups tournaments by state (Register / Watch / Finished) so the
+ * same page gives each role a clear entry point. Detail view uses the
+ * standings board for the live spectator mode.
+ */
+
+.tourney-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tourney-group__empty {
+  font-size: 12px;
+  color: var(--ink-soft);
+  padding: 6px 2px;
+  font-style: italic;
+}
+
+.tourney-card {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
+}
+
+.tourney-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+}
+
+.tourney-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tourney-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tourney-card__meta {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.tourney-card__state {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.tourney-card__state--open {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 50%, var(--line));
+}
+
+.tourney-card__state--running {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.tourney-card__state--finished {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 50%, var(--line));
+}
+
+/* -------- Standings / bracket-style leaderboard ----------------------- */
+
+.standings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.standings__row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 14px;
+  color: var(--ink);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+
+.standings__row + .standings__row {
+  margin-top: 4px;
+}
+
+.standings__row--me {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.standings__rank {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.standings__row--gold .standings__rank {
+  color: var(--gold);
+}
+.standings__row--silver .standings__rank {
+  color: color-mix(in srgb, var(--ink-soft) 70%, var(--ink));
+}
+.standings__row--bronze .standings__rank {
+  color: color-mix(in srgb, var(--gold) 70%, var(--ink-soft));
+}
+
+.standings__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.standings__name strong {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.standings__team {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.standings__pts {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.standings__pts small {
+  display: block;
+  text-align: right;
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.standings__empty {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-style: italic;
+  padding: 12px;
+  text-align: center;
+}
+
+/* Live indicator on the standings header */
+.standings__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.standings__live__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent);
+  animation: standings-pulse 1.8s ease-out infinite;
+}
+
+@keyframes standings-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .standings__live__dot {
+    animation: none;
+  }
+}
+
+/* -------- Predictions placeholder ------------------------------------- */
+
+.predictions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.predictions__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.predictions__row span.pts {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.predictions__footnote {
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin: 0;
+}

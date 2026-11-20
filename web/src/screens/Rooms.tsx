@@ -1,14 +1,33 @@
 /**
  * Multiplayer rooms screen. OWNED FILE.
  *
- * Deliberately plain: this exists to exercise the room protocol against the
- * real Durable Object. Card A owns the visual system; this screen should adopt
- * its primitives once they land.
+ * Two surfaces share this file:
+ *   - a lobby landing with a hero "Create a room" tile and a focused
+ *     four-cell code entry for joining;
+ *   - the live room with player chips, the question stage (letter-by-letter
+ *     reveal interpolated between server snapshots), the judged banner, a
+ *     BUZZ button and the answer input.
+ *
+ * All visual primitives come from the design system (Sheet / Button / Field);
+ * the bespoke parts (four-cell code input, player chips, stage, judged
+ * banner) live in Rooms.css so they stay theme-aware through CSS variables
+ * rather than inline styles.
  */
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react';
+import { Button, Field, Sheet, TextInput } from '../ui';
 import { createRoom } from '../room/client';
 import { useRoom } from '../room/useRoom';
+import './Rooms.css';
+
+const CODE_LEN = 4;
 
 export default function Rooms({ baseUrl = '' }: { baseUrl?: string }) {
   const [name, setName] = useState('');
@@ -17,69 +36,171 @@ export default function Rooms({ baseUrl = '' }: { baseUrl?: string }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  if (!joined) {
+  if (joined) {
     return (
-      <div style={S.wrap}>
-        <h2 style={S.h2}>Rooms</h2>
-        <p style={S.hint}>
-          Everyone reads the same question at the same instant. Buzz order is
-          decided by the server, so the fastest finger wins rather than the
-          fastest connection.
-        </p>
-
-        <label style={S.label}>
-          your name
-          <input
-            style={S.input}
-            value={name}
-            maxLength={24}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="nickname"
-          />
-        </label>
-
-        <div style={S.row}>
-          <input
-            style={{ ...S.input, textTransform: 'uppercase', letterSpacing: 4 }}
-            value={codeInput}
-            maxLength={4}
-            onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-            placeholder="CODE"
-          />
-          <button
-            style={S.btn}
-            disabled={codeInput.length !== 4 || name.trim() === ''}
-            onClick={() => setJoined(codeInput)}
-          >
-            Join
-          </button>
-        </div>
-
-        <button
-          style={S.btnPrimary}
-          disabled={creating || name.trim() === ''}
-          onClick={async () => {
-            setCreating(true);
-            setCreateError(null);
-            try {
-              setJoined(await createRoom(baseUrl));
-            } catch (err) {
-              setCreateError(err instanceof Error ? err.message : 'failed');
-            } finally {
-              setCreating(false);
-            }
-          }}
-        >
-          {creating ? 'creating…' : 'Create a room'}
-        </button>
-
-        {createError ? <p style={S.err}>{createError}</p> : null}
-      </div>
+      <InRoom
+        code={joined}
+        name={name}
+        baseUrl={baseUrl}
+        onLeave={() => setJoined(null)}
+      />
     );
   }
 
-  return <InRoom code={joined} name={name} baseUrl={baseUrl} onLeave={() => setJoined(null)} />;
+  const canJoin = codeInput.length === CODE_LEN && name.trim() !== '';
+  const canCreate = !creating && name.trim() !== '';
+
+  const create = async () => {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      setJoined(await createRoom(baseUrl));
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'failed to create');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="rooms">
+      <Sheet>
+        <div className="rooms__intro">
+          <p>
+            Everyone reads the same question at the same instant. Buzz order
+            is decided by the server, so the fastest finger wins rather than
+            the fastest connection.
+          </p>
+        </div>
+      </Sheet>
+
+      <Sheet title="Your nickname">
+        <Field label="how others see you">
+          <TextInput
+            value={name}
+            maxLength={24}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="pick a nickname"
+            autoFocus
+          />
+        </Field>
+      </Sheet>
+
+      <Sheet title="Start a room">
+        <p className="tiny muted">
+          Opens a fresh room and gives you a code to share.
+        </p>
+        <Button
+          variant="primary"
+          block
+          disabled={!canCreate}
+          onClick={() => void create()}
+        >
+          {creating ? 'Creating…' : 'Create a room'}
+        </Button>
+        {createError ? (
+          <p className="banner banner--warn">{createError}</p>
+        ) : null}
+      </Sheet>
+
+      <div className="rooms__or">or</div>
+
+      <Sheet title="Join with a code">
+        <p className="tiny muted">
+          Four letters. Not case-sensitive.
+        </p>
+        <CodeEntry
+          value={codeInput}
+          onChange={(v) => setCodeInput(v)}
+          onComplete={(v) => {
+            if (name.trim() !== '') setJoined(v);
+          }}
+        />
+        <Button
+          variant="primary"
+          block
+          disabled={!canJoin}
+          onClick={() => setJoined(codeInput)}
+        >
+          Join {codeInput ? codeInput : ''}
+        </Button>
+      </Sheet>
+    </div>
+  );
 }
+
+// ---------------------------------------------------------------------------
+// Four-cell code entry
+// ---------------------------------------------------------------------------
+
+/**
+ * A single invisible <input maxLength=4> overlays four cells. The cells show
+ * the typed letters; the input receives focus and handles paste / backspace
+ * naturally. One IME-visible control keeps mobile autocorrect out of the way.
+ */
+function CodeEntry({
+  value,
+  onChange,
+  onComplete,
+}: {
+  value: string;
+  onChange(v: string): void;
+  onComplete(v: string): void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  const handle = (e: ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '')
+      .slice(0, CODE_LEN);
+    onChange(next);
+    if (next.length === CODE_LEN) onComplete(next);
+  };
+
+  const cells = [];
+  for (let i = 0; i < CODE_LEN; i++) {
+    const ch = value[i] ?? '';
+    const isCaret = i === value.length && document.activeElement === ref.current;
+    cells.push(
+      <span
+        key={i}
+        className={[
+          'code-entry__cell',
+          ch ? 'code-entry__cell--filled' : '',
+          isCaret ? 'code-entry__cell--caret' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {ch}
+      </span>,
+    );
+  }
+
+  return (
+    <label className="code-entry">
+      <input
+        ref={ref}
+        className="code-entry__input"
+        value={value}
+        onChange={handle}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        inputMode="text"
+        maxLength={CODE_LEN}
+        aria-label="room code"
+      />
+      <span className="code-entry__cells">{cells}</span>
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// In-room: live play
+// ---------------------------------------------------------------------------
 
 function InRoom({
   code,
@@ -98,13 +219,17 @@ function InRoom({
   const snap = room.snapshot;
   const me = room.playerId;
   const iHoldBuzz = snap?.buzzer != null && snap.buzzer === me;
+  const myLockout =
+    snap?.players.find((p) => p.id === me)?.lockedOut ?? false;
 
   useEffect(() => {
     if (iHoldBuzz) inputRef.current?.focus();
   }, [iHoldBuzz]);
 
+  // SPACE buzzes in-room. The tossup screen handles space itself inside its
+  // own phase-aware handler, so there is never a collision between them.
   useEffect(() => {
-    const onKey = (ev: KeyboardEvent) => {
+    const onKey = (ev: globalThis.KeyboardEvent) => {
       const el = ev.target as HTMLElement | null;
       const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA';
       if (ev.code === 'Space' && !typing && snap?.phase === 'reading') {
@@ -130,43 +255,74 @@ function InRoom({
     }
     powerEnd = powerStart + (words[powerIndex] ?? '').length;
   }
-  const myLockout = snap?.players.find((p) => p.id === me)?.lockedOut ?? false;
+
+  const submitAnswer = useCallback(() => {
+    if (!iHoldBuzz) return;
+    room.answer(given);
+    setGiven('');
+  }, [given, iHoldBuzz, room]);
+
+  const onAnswerKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') submitAnswer();
+  };
 
   return (
-    <div style={S.wrap}>
-      <div style={S.topline}>
-        <span style={S.code}>{code}</span>
-        <span style={S.conn(room.connection)}>{room.connection}</span>
-        <button style={S.linkBtn} onClick={onLeave}>
-          leave
-        </button>
-      </div>
-
-      <div style={S.players}>
-        {(snap?.players ?? []).map((p) => (
+    <div className="rooms">
+      <Sheet
+        title="Room"
+        aside={
+          <Button variant="ghost" small onClick={onLeave}>
+            Leave
+          </Button>
+        }
+      >
+        <div className="rooms__topline">
+          <span className="rooms__code">{code}</span>
           <span
-            key={p.id}
-            style={{
-              ...S.player,
-              opacity: p.connected ? 1 : 0.4,
-              borderColor:
-                snap?.buzzer === p.id ? 'var(--accent)' : 'var(--line)',
-            }}
+            className={[
+              'rooms__conn',
+              room.connection === 'connected' ? 'rooms__conn--on' : '',
+              room.connection !== 'connected' ? 'rooms__conn--off' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
           >
-            <span>{p.name}</span>
-            <strong style={S.score}>{p.score}</strong>
-            {p.lockedOut ? <span style={S.lock}>out</span> : null}
+            {room.connection}
           </span>
-        ))}
-      </div>
+        </div>
 
-      <div style={S.card}>
+        <div className="rooms__players">
+          {(snap?.players ?? []).map((p) => (
+            <span
+              key={p.id}
+              className={[
+                'player-chip',
+                snap?.buzzer === p.id ? 'player-chip--buzzed' : '',
+                p.connected ? '' : 'player-chip--offline',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <span>{p.name}</span>
+              <span className="player-chip__score">{p.score}</span>
+              {p.lockedOut ? (
+                <span className="player-chip__out">out</span>
+              ) : null}
+            </span>
+          ))}
+          {(snap?.players.length ?? 0) === 0 ? (
+            <span className="tiny muted">waiting for players…</span>
+          ) : null}
+        </div>
+      </Sheet>
+
+      <div className="rooms__stage">
         {snap?.question ? (
-          <p style={S.question}>
+          <p className="rooms__question">
             {powerIndex !== null ? (
               <>
                 <span>{shown.slice(0, Math.min(shownChars, powerStart))}</span>
-                <span style={{ color: 'var(--gold)' }}>
+                <span className="rooms__question--power">
                   {shown.slice(
                     Math.min(shownChars, powerStart),
                     Math.min(shownChars, powerEnd),
@@ -178,193 +334,105 @@ function InRoom({
               <span>{shown}</span>
             )}
             {snap.phase === 'resolved' && rest.length > 0 ? (
-              <span style={{ color: 'var(--ink-soft)' }}>{rest}</span>
+              <span className="rooms__question--rest">{rest}</span>
             ) : null}
           </p>
         ) : (
-          <p style={S.waiting}>
+          <p className="rooms__waiting">
             {snap?.phase === 'lobby'
-              ? 'Waiting. Anyone can start the next question.'
-              : 'connecting…'}
+              ? 'Anyone can start the next question.'
+              : 'Connecting…'}
           </p>
         )}
       </div>
 
-      <div style={S.status}>
+      <div className="rooms__status">
         <span>
-          {snap?.phase === 'buzzed'
-            ? `${snap.players.find((p) => p.id === snap.buzzer)?.name ?? 'someone'} buzzed${
-                room.secondsLeft !== null ? ` · ${room.secondsLeft}s` : ''
-              }`
-            : snap?.phase === 'reading'
-              ? myLockout
-                ? 'locked out on this question'
-                : 'SPACE to buzz'
-              : snap?.phase === 'resolved'
-                ? (snap.reveal?.answerSanitized ?? '')
-                : ''}
+          {snap?.phase === 'buzzed' ? (
+            <>
+              <strong>
+                {snap.players.find((p) => p.id === snap.buzzer)?.name ??
+                  'someone'}
+              </strong>{' '}
+              buzzed
+              {room.secondsLeft !== null ? ` · ${room.secondsLeft}s` : ''}
+            </>
+          ) : snap?.phase === 'reading' ? (
+            myLockout ? (
+              'locked out on this question'
+            ) : (
+              <>
+                press <strong>SPACE</strong> to buzz
+              </>
+            )
+          ) : snap?.phase === 'resolved' ? (
+            <strong>{snap.reveal?.answerSanitized ?? ''}</strong>
+          ) : (
+            ''
+          )}
         </span>
-        <span style={{ color: 'var(--ink-soft)' }}>
+        <span>
           {snap?.question ? `${room.revealed}/${words.length}` : ''}
         </span>
       </div>
 
       {room.lastJudged ? (
         <div
-          style={{
-            ...S.judged,
-            borderColor:
-              room.lastJudged.directive === 'accept'
-                ? 'var(--good)'
-                : room.lastJudged.directive === 'prompt'
-                  ? 'var(--gold)'
-                  : 'var(--bad)',
-          }}
+          className={[
+            'rooms__judged',
+            `rooms__judged--${room.lastJudged.directive}`,
+          ].join(' ')}
         >
-          {snap?.players.find((p) => p.id === room.lastJudged?.playerId)?.name}{' '}
-          {room.lastJudged.directive}
-          {room.lastJudged.directedPrompt
-            ? ` — ${room.lastJudged.directedPrompt}`
-            : ''}{' '}
-          {room.lastJudged.points !== 0
-            ? `${room.lastJudged.points > 0 ? '+' : ''}${room.lastJudged.points}`
-            : ''}
+          <span>
+            <b>
+              {snap?.players.find((p) => p.id === room.lastJudged?.playerId)
+                ?.name}
+            </b>{' '}
+            {room.lastJudged.directive}
+            {room.lastJudged.directedPrompt
+              ? ` — ${room.lastJudged.directedPrompt}`
+              : ''}
+          </span>
+          {room.lastJudged.points !== 0 ? (
+            <span className="rooms__judged__points">
+              {room.lastJudged.points > 0 ? '+' : ''}
+              {room.lastJudged.points}
+            </span>
+          ) : null}
         </div>
       ) : null}
 
-      <div style={S.row}>
-        <button
-          style={{ ...S.buzz, opacity: snap?.phase === 'reading' && !myLockout ? 1 : 0.35 }}
+      <div className="rooms__actions">
+        <Button
+          variant="buzz"
           disabled={snap?.phase !== 'reading' || myLockout}
           onClick={room.buzz}
         >
           BUZZ
-        </button>
-        <input
+        </Button>
+        <TextInput
           ref={inputRef}
-          style={{ ...S.input, opacity: iHoldBuzz ? 1 : 0.35 }}
           disabled={!iHoldBuzz}
           value={given}
           placeholder={iHoldBuzz ? 'your answer, then Enter' : '—'}
           onChange={(e) => setGiven(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && iHoldBuzz) {
-              room.answer(given);
-              setGiven('');
-            }
-          }}
+          onKeyDown={onAnswerKey}
         />
       </div>
 
-      <div style={S.row}>
-        <button style={S.btn} onClick={room.start} disabled={snap?.phase === 'reading'}>
+      <div className="rooms__footer">
+        <Button
+          onClick={room.start}
+          disabled={snap?.phase === 'reading'}
+        >
           Start question
-        </button>
-        <button style={S.btn} onClick={room.next}>
+        </Button>
+        <Button variant="ghost" onClick={room.next}>
           Clear
-        </button>
+        </Button>
       </div>
 
-      {room.error ? <p style={S.err}>{room.error}</p> : null}
+      {room.error ? <p className="banner banner--warn">{room.error}</p> : null}
     </div>
   );
 }
-
-const S = {
-  wrap: {
-    width: '100%',
-    maxWidth: 1040,
-    margin: '0 auto',
-    padding: 16,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    boxSizing: 'border-box',
-  } as CSSProperties,
-  h2: { margin: 0, fontSize: 18 } as CSSProperties,
-  hint: { margin: 0, fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.5 } as CSSProperties,
-  label: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--ink-soft)' } as CSSProperties,
-  row: { display: 'flex', gap: 8, flexWrap: 'wrap' } as CSSProperties,
-  input: {
-    flex: 1,
-    minWidth: 140,
-    background: 'var(--panel-2)',
-    border: '1px solid var(--line)',
-    borderRadius: 6,
-    color: 'var(--ink)',
-    padding: '0 12px',
-    minHeight: 44,
-  } as CSSProperties,
-  btn: {
-    background: 'transparent',
-    color: 'var(--ink)',
-    border: '1px solid var(--line)',
-    borderRadius: 6,
-    padding: '0 16px',
-    minHeight: 44,
-  } as CSSProperties,
-  btnPrimary: {
-    background: 'var(--accent)',
-    color: '#0b1016',
-    border: 0,
-    borderRadius: 6,
-    padding: '0 16px',
-    minHeight: 44,
-    fontWeight: 600,
-  } as CSSProperties,
-  buzz: {
-    background: 'var(--bad)',
-    color: '#fff',
-    border: 0,
-    borderRadius: 6,
-    padding: '0 22px',
-    minHeight: 48,
-    fontWeight: 700,
-    letterSpacing: 0.6,
-  } as CSSProperties,
-  linkBtn: {
-    background: 'none',
-    border: 0,
-    color: 'var(--ink-soft)',
-    fontSize: 11,
-    textDecoration: 'underline',
-  } as CSSProperties,
-  topline: { display: 'flex', alignItems: 'center', gap: 10 } as CSSProperties,
-  code: { fontSize: 20, letterSpacing: 6, fontWeight: 700 } as CSSProperties,
-  conn: (c: string): CSSProperties => ({
-    fontSize: 10,
-    letterSpacing: 0.5,
-    color: c === 'connected' ? 'var(--good)' : 'var(--gold)',
-    border: '1px solid var(--line)',
-    borderRadius: 3,
-    padding: '1px 6px',
-  }),
-  players: { display: 'flex', gap: 8, flexWrap: 'wrap' } as CSSProperties,
-  player: {
-    display: 'flex',
-    gap: 6,
-    alignItems: 'center',
-    border: '1px solid var(--line)',
-    borderRadius: 5,
-    padding: '4px 8px',
-    fontSize: 12,
-  } as CSSProperties,
-  score: { fontVariantNumeric: 'tabular-nums' } as CSSProperties,
-  lock: { fontSize: 9, color: 'var(--bad)' } as CSSProperties,
-  card: {
-    background: 'var(--panel)',
-    border: '1px solid var(--line)',
-    borderRadius: 8,
-    padding: '18px 20px',
-    minHeight: 170,
-    maxWidth: 820,
-    width: '100%',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-  } as CSSProperties,
-  question: { margin: 0, fontFamily: 'var(--font-read)', fontSize: 17, lineHeight: 1.62 } as CSSProperties,
-  waiting: { margin: 0, color: 'var(--ink-soft)', fontSize: 13 } as CSSProperties,
-  status: { display: 'flex', justifyContent: 'space-between', fontSize: 11, minHeight: 16 } as CSSProperties,
-  judged: { border: '1px solid', borderRadius: 6, padding: '8px 10px', fontSize: 12 } as CSSProperties,
-  err: { color: 'var(--bad)', fontSize: 12, margin: 0 } as CSSProperties,
-};

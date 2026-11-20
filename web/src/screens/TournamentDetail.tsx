@@ -36,6 +36,7 @@ import {
   type TournamentDetail as TournamentDetailData,
   type TournamentQuestion,
 } from '../tournaments';
+import './Tournaments.css';
 
 export interface TournamentDetailProps {
   id: number;
@@ -133,21 +134,32 @@ export default function TournamentDetail({ id, onExit }: TournamentDetailProps) 
           onUpdate={handle.update}
         />
       ) : tournament.state === 'running' && !isPlayer ? (
-        <Sheet title="In progress">
+        <Sheet title="Spectating" aside={<LivePulse />}>
           <p className="tiny muted">
             {me === null
-              ? 'Sign in and ask the host to add you.'
-              : 'This tournament is already running. Join is closed.'}
+              ? 'Sign in to join future tournaments. You can still watch this one live.'
+              : 'This tournament is already running — join is closed, but you can follow the live standings below.'}
           </p>
         </Sheet>
-      ) : (
-        <Sheet title={tournament.state === 'finished' ? 'Finished' : 'Closed'}>
-          <p className="tiny muted">no further action</p>
-        </Sheet>
-      )}
+      ) : null}
 
       {tournament.state === 'running' || tournament.state === 'finished' ? (
-        <LiveScoreboard tournamentId={tournament.id} meId={me?.id ?? null} />
+        <LiveScoreboard
+          tournamentId={tournament.id}
+          meId={me?.id ?? null}
+          isPlayer={isPlayer}
+          live={tournament.state === 'running'}
+        />
+      ) : null}
+
+      {tournament.state === 'running' && !isPlayer ? (
+        <PredictionsSheet tournament={tournament} />
+      ) : null}
+
+      {tournament.state === 'cancelled' ? (
+        <Sheet title="Cancelled">
+          <p className="tiny muted">This tournament was cancelled.</p>
+        </Sheet>
       ) : null}
     </Screen>
   );
@@ -156,9 +168,13 @@ export default function TournamentDetail({ id, onExit }: TournamentDetailProps) 
 function LiveScoreboard({
   tournamentId,
   meId,
+  isPlayer,
+  live,
 }: {
   tournamentId: number;
   meId: number | null;
+  isPlayer: boolean;
+  live: boolean;
 }) {
   const [scoreboard, setScoreboard] = useState<ScoreboardEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,21 +192,158 @@ function LiveScoreboard({
     void refresh();
   }, [refresh]);
 
+  // Auto-refresh while the tournament is live so spectators do not need to
+  // tap. Players running questions don't need this: the PlayView already
+  // triggers a refresh after every attempt.
+  useEffect(() => {
+    if (!live || isPlayer) return;
+    const handle = window.setInterval(() => void refresh(), 10000);
+    return () => window.clearInterval(handle);
+  }, [live, isPlayer, refresh]);
+
   if (error) {
     return (
-      <Sheet title="Scoreboard">
+      <Sheet title="Standings">
         <p className="banner banner--warn">{error}</p>
       </Sheet>
     );
   }
   if (!scoreboard) {
     return (
-      <Sheet title="Scoreboard">
+      <Sheet title="Standings">
         <p className="tiny muted">loading</p>
       </Sheet>
     );
   }
-  return <ScoreboardSheet scoreboard={scoreboard} meId={meId} />;
+  return <StandingsSheet scoreboard={scoreboard} meId={meId} live={live} />;
+}
+
+/**
+ * The live bracket-style standings board. Two modes share one sheet:
+ *   - During a running tournament it polls for refreshes and shows a
+ *     pulsing LIVE dot in the header.
+ *   - After a tournament finishes it just shows the final order.
+ * Top three places pick up gold/silver/bronze rank colours.
+ */
+function StandingsSheet({
+  scoreboard,
+  meId,
+  live,
+}: {
+  scoreboard: ScoreboardEntry[];
+  meId: number | null;
+  live: boolean;
+}) {
+  return (
+    <Sheet
+      title="Standings"
+      aside={live ? <LivePulse /> : <span className="tiny muted">Final</span>}
+    >
+      {scoreboard.length === 0 ? (
+        <p className="standings__empty">
+          No points scored yet — the first buzz will show up here.
+        </p>
+      ) : (
+        <ol className="standings" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {scoreboard.map((e, i) => {
+            const rank = i + 1;
+            const medal =
+              rank === 1
+                ? 'gold'
+                : rank === 2
+                  ? 'silver'
+                  : rank === 3
+                    ? 'bronze'
+                    : '';
+            return (
+              <li
+                key={e.user_id}
+                className={[
+                  'standings__row',
+                  medal ? `standings__row--${medal}` : '',
+                  e.user_id === meId ? 'standings__row--me' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <span className="standings__rank">{rank}</span>
+                <span className="standings__name">
+                  <strong>{e.username}</strong>
+                  {e.team ? (
+                    <span className="standings__team">{e.team}</span>
+                  ) : null}
+                </span>
+                <span className="standings__pts">
+                  {e.points}
+                  {e.restitution_delta !== 0 ? (
+                    <small>
+                      {e.base_points >= 0 ? '+' : ''}
+                      {e.base_points}
+                      {e.restitution_delta >= 0 ? ' +' : ' '}
+                      {e.restitution_delta}
+                    </small>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Sheet>
+  );
+}
+
+/** Tiny animated LIVE indicator, used as the Sheet aside while polling. */
+function LivePulse() {
+  return (
+    <span className="standings__live">
+      <span className="standings__live__dot" aria-hidden />
+      Live
+    </span>
+  );
+}
+
+/**
+ * Predictions placeholder — the ranked-system hook is not live yet, so
+ * this sheet shows what the surface will become. Rendering it on the
+ * spectator path (not for players, who are too busy) foreshadows the
+ * feature without pretending it works.
+ */
+function PredictionsSheet({
+  tournament,
+}: {
+  tournament: TournamentDetailData;
+}) {
+  const top = tournament.players.slice(0, 3);
+  return (
+    <Sheet
+      title="Predictions"
+      aside={<span className="tiny muted">Preview</span>}
+    >
+      <div className="predictions">
+        {top.length === 0 ? (
+          <p className="predictions__footnote">
+            Predictions will appear once players join.
+          </p>
+        ) : (
+          top.map((p, i) => (
+            <div key={p.user_id} className="predictions__row">
+              <span>
+                {i + 1}. {p.username}
+                {p.team ? ` · ${p.team}` : ''}
+              </span>
+              <span className="pts">— rating</span>
+            </div>
+          ))
+        )}
+        <p className="predictions__footnote">
+          A ranked system is coming. Once ratings go live this card will show
+          each player's win-probability and point projection for the rest of
+          the match.
+        </p>
+      </div>
+    </Sheet>
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -1,22 +1,41 @@
 /**
- * Tournaments hub: list open and running tournaments, create one, or open one
- * for detail. Hosting and joining require a signed-in account; browsing the
- * list does not, so anyone can see what is on.
+ * Tournaments hub: list grouped by role (Register / Watch / Finished),
+ * create one, or open one for detail.
  *
- * Creating opens an inline sheet rather than a separate screen; the project
- * settles on sheets for short forms.
+ * The grouping by state is what gives the page its shape: an open tournament
+ * wants a join button, a running one wants a watch-with-standings surface,
+ * and a finished one wants a results view. Everyone — signed in or not —
+ * can watch a running tournament; joining still requires an account.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Button, Field, Sheet, TextInput } from '../ui';
 import { useAuth } from '../auth';
 import {
   createTournament,
   useTournamentList,
   type TournamentFormat,
+  type TournamentState,
   type TournamentSummary,
 } from '../tournaments';
 import TournamentDetail from './TournamentDetail';
+import './Tournaments.css';
+
+type GroupKey = 'open' | 'running' | 'finished';
+
+const GROUPS: { key: GroupKey; title: string; empty: string }[] = [
+  { key: 'open', title: 'Register', empty: 'No tournaments are accepting players right now.' },
+  { key: 'running', title: 'Watch live', empty: 'No tournaments are running right now.' },
+  { key: 'finished', title: 'Finished', empty: 'No tournaments have finished yet.' },
+];
+
+// Fold cancelled tournaments into the finished column: both are terminal and
+// neither takes new players, and callers of the detail view handle both.
+function groupFor(state: TournamentState): GroupKey {
+  if (state === 'open') return 'open';
+  if (state === 'running') return 'running';
+  return 'finished';
+}
 
 export default function Tournaments() {
   const auth = useAuth();
@@ -37,6 +56,18 @@ export default function Tournaments() {
   }
 
   const canCreate = auth.user !== null;
+
+  const byState = useMemo(() => {
+    const out: Record<GroupKey, TournamentSummary[]> = {
+      open: [],
+      running: [],
+      finished: [],
+    };
+    for (const t of list.tournaments) {
+      out[groupFor(t.state)].push(t);
+    }
+    return out;
+  }, [list.tournaments]);
 
   return (
     <>
@@ -61,8 +92,8 @@ export default function Tournaments() {
         ) : (
           <Sheet title="Sign in to host">
             <p className="tiny muted">
-              Hosting and joining a tournament need an account. Browsing the
-              list does not. Sign in from Settings.
+              Hosting and joining need an account. You can still watch a
+              running tournament. Sign in from Settings.
             </p>
           </Sheet>
         )}
@@ -77,28 +108,48 @@ export default function Tournaments() {
           />
         ) : null}
 
-        <Sheet title="Open and running">
-          {list.loading ? (
+        {list.loading && list.tournaments.length === 0 ? (
+          <Sheet>
             <p className="tiny muted">loading</p>
-          ) : list.error ? (
+          </Sheet>
+        ) : list.error ? (
+          <Sheet>
             <p className="banner banner--warn">{list.error}</p>
-          ) : list.tournaments.length === 0 ? (
-            <p className="tiny muted">
-              No tournaments yet.
-              {canCreate ? ' Start one with the button above.' : ''}
-            </p>
-          ) : (
-            <ul className="tournaments__list" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {list.tournaments.map((t) => (
-                <li key={t.id}>
-                  <TournamentCard t={t} onOpen={() => setOpenId(t.id)} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Sheet>
+          </Sheet>
+        ) : (
+          GROUPS.map((g) => (
+            <Sheet key={g.key} title={g.title}>
+              <TournamentGroup
+                items={byState[g.key]}
+                empty={g.empty}
+                onOpen={setOpenId}
+              />
+            </Sheet>
+          ))
+        )}
       </div>
     </>
+  );
+}
+
+function TournamentGroup({
+  items,
+  empty,
+  onOpen,
+}: {
+  items: TournamentSummary[];
+  empty: string;
+  onOpen(id: number): void;
+}) {
+  if (items.length === 0) {
+    return <p className="tourney-group__empty">{empty}</p>;
+  }
+  return (
+    <div className="tourney-group">
+      {items.map((t) => (
+        <TournamentCard key={t.id} t={t} onOpen={() => onOpen(t.id)} />
+      ))}
+    </div>
   );
 }
 
@@ -109,31 +160,28 @@ function TournamentCard({
   t: TournamentSummary;
   onOpen(): void;
 }) {
+  const stateLabel =
+    t.state === 'open'
+      ? 'Open'
+      : t.state === 'running'
+        ? 'Live'
+        : t.state === 'cancelled'
+          ? 'Cancelled'
+          : 'Final';
+  const stateClass = groupFor(t.state);
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      style={{
-        display: 'block',
-        width: '100%',
-        textAlign: 'left',
-        padding: '10px 12px',
-        background: 'var(--surface-2, var(--panel-2))',
-        border: '1px solid var(--line)',
-        borderRadius: 6,
-        color: 'var(--ink)',
-        cursor: 'pointer',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-        <strong>{t.name}</strong>
-        <span className="tiny muted">{t.state}</span>
+    <button type="button" className="tourney-card" onClick={onOpen}>
+      <div className="tourney-card__body">
+        <span className="tourney-card__title">{t.name}</span>
+        <span className="tourney-card__meta">
+          host {t.creator_username} · {t.n_tossups} tossups
+          {t.n_bonuses > 0 ? ` + ${t.n_bonuses} bonuses` : ''} ·{' '}
+          {t.player_count} player{t.player_count === 1 ? '' : 's'}
+        </span>
       </div>
-      <div className="tiny muted">
-        host {t.creator_username} / {t.n_tossups} tossups
-        {t.n_bonuses > 0 ? ` + ${t.n_bonuses} bonuses` : ''} /{' '}
-        {t.player_count} player{t.player_count === 1 ? '' : 's'}
-      </div>
+      <span className={`tourney-card__state tourney-card__state--${stateClass}`}>
+        {stateLabel}
+      </span>
     </button>
   );
 }
