@@ -92,6 +92,12 @@ input {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* Anchor theme-dependent color/background on .app itself so
+     `.app[data-theme=...]` overrides reach descendants. body is painted
+     from :root tokens before the theme attribute is read, so without this
+     anchor every child inherits the default dark theme's ink. */
+  background: var(--bg);
+  color: var(--ink);
 }
 
 .app__body {
