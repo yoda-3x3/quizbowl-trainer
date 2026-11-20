@@ -43,6 +43,18 @@ export default function Tournaments() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
+  const byState = useMemo(() => {
+    const out: Record<GroupKey, TournamentSummary[]> = {
+      open: [],
+      running: [],
+      finished: [],
+    };
+    for (const t of list.tournaments) {
+      out[groupFor(t.state)].push(t);
+    }
+    return out;
+  }, [list.tournaments]);
+
   if (openId !== null) {
     return (
       <TournamentDetail
@@ -56,18 +68,6 @@ export default function Tournaments() {
   }
 
   const canCreate = auth.user !== null;
-
-  const byState = useMemo(() => {
-    const out: Record<GroupKey, TournamentSummary[]> = {
-      open: [],
-      running: [],
-      finished: [],
-    };
-    for (const t of list.tournaments) {
-      out[groupFor(t.state)].push(t);
-    }
-    return out;
-  }, [list.tournaments]);
 
   return (
     <>
