@@ -177,6 +177,15 @@ export interface AttemptEvent {
     answerSanitized: string;
     setName: string;
   };
+  /**
+   * Learn-tab lesson tagging. Present on events logged inside a Duolingo-style
+   * lesson session so the daily lesson counter and streak can tell them apart
+   * from solo-practice events. Older events predate the tag and simply lack
+   * both fields; the derivations treat an absent tag as "not part of a lesson".
+   */
+  lessonId?: string;
+  /** 0-based index of this event within its lesson, when `lessonId` is set. */
+  lessonSeq?: number;
 }
 
 // ---------------------------------------------------------------------------

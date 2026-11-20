@@ -1,51 +1,70 @@
 /**
- * The Learn tab: a scroll-driven study surface over your own attempt log.
+ * The Learn tab: a Duolingo-style study surface over the event log.
  *
- * Four chapters, hard cut, in a deliberate emotional order: exposed, then the
- * sting of a specific miss, then equipped, then the lift of having improved.
- * Each chapter uses a different device family, and no two neighbours share one:
+ * Three sections, stacked:
+ *   1. A streak header with the flame, today's lesson goal and total XP.
+ *   2. Units — one per Category — each with a vertical path of 5 lessons.
+ *   3. A short review queue of missed items, each with its own retry.
  *
- *   1 weak spots   counting numbers, held still at the end
- *   2 misses       the signature interaction (owned by another card)
- *   3 lessons      lateral pan driven by vertical scroll
- *   4 progress     clip-path wipe between then and now
+ * A lesson taps into the existing Tossup screen via `TossupSource`, the same
+ * hook tournament mode uses, so no part of the reader/judge/scoring loop is
+ * reimplemented here. Progress — streak, XP, lessons-today — is derived from
+ * the AttemptEvent log; there is no second source of truth.
  *
- * This is a live surface, not a page about the product: no hero, no display
- * type, no section counters, no scroll cue. Copy is labels, status lines and
- * written empty states, because on first run there is genuinely nothing here
- * and a zeroed chart would be a lie told with a straight face.
- *
- * Every number is derived from the event log through `src/learn/derive.ts`.
+ * The earlier scroll-driven chapter surface is retired. Its component files
+ * are kept on disk for other work in flight but are no longer imported here.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { all, isEphemeral } from '../engine/log';
-import { missedQuestions, summary } from '../learn/derive';
-import WeakSpots from '../learn/chapters/WeakSpots';
-import Lessons from '../learn/chapters/Lessons';
-import ProgressChapter from '../learn/chapters/Progress';
-import { PillRow, StatPill, pct, useSettings } from '../ui';
-import type { AttemptEvent } from '../types';
+import { summary } from '../learn/derive';
+import { streakSummary } from '../learn/streak';
+import { unitProgress, type LessonDef } from '../learn/units';
+import { reviewQueue, type ReviewItem } from '../learn/reviewQueue';
+import StreakHeader from '../learn/components/StreakHeader';
+import UnitPath from '../learn/components/UnitPath';
+import ReviewCard from '../learn/components/ReviewCard';
+import LessonSession from '../learn/components/LessonSession';
+import { PillRow, StatPill, pct } from '../ui';
+import type { AttemptEvent, Tossup as TossupQuestion } from '../types';
 import '../learn/learn.css';
 
-/* ---------------------------------------------------------------------------
- * CHAPTER 2 PLACEHOLDER
- *
- * `src/learn/chapters/Misses.tsx` is owned by another card and is not on disk
- * yet. It is the signature interaction and is deliberately NOT implemented
- * here. When it lands, delete `MissesPlaceholder` below and restore:
- *
- *   import Misses from '../learn/chapters/Misses';
- *   ...
- *   <Misses events={events} wpm={settings.wpm} />
- *
- * The placeholder keeps the chapter's frame, status line and empty state so
- * the four-chapter rhythm is visible and testable in the meantime.
- * ------------------------------------------------------------------------- */
+type Mode =
+  | { kind: 'browsing' }
+  | { kind: 'lesson'; lesson: LessonDef; pinned?: TossupQuestion[] };
+
+/**
+ * Rebuilds a bare Tossup from the snapshot stored on a review event. The
+ * snapshot keeps only the fields the reader needs; set metadata we never
+ * actually read gets safe placeholders.
+ */
+function tossupFromReview(item: ReviewItem): TossupQuestion {
+  return {
+    id: item.questionId,
+    question: item.questionSanitized,
+    questionSanitized: item.questionSanitized,
+    answer: item.answerSanitized,
+    answerSanitized: item.answerSanitized,
+    category: item.category,
+    subcategory: item.subcategory,
+    difficulty: item.difficulty,
+    setName: item.setName,
+    setYear: 0,
+    packetNumber: 0,
+    questionNumber: 0,
+    source: 'bundled',
+  };
+}
 
 export default function Learn() {
-  const [settings] = useSettings();
   const [events, setEvents] = useState<AttemptEvent[] | null>(null);
+  const [mode, setMode] = useState<Mode>({ kind: 'browsing' });
+
+  const reload = useCallback(() => {
+    void all()
+      .then((rows) => setEvents(rows))
+      .catch(() => setEvents([]));
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -61,8 +80,51 @@ export default function Learn() {
     };
   }, []);
 
+  // Re-read the log whenever we come back from a lesson so the streak, the
+  // unit progress and the review queue reflect what was just played.
+  useEffect(() => {
+    if (mode.kind === 'browsing') reload();
+  }, [mode.kind, reload]);
+
   const loaded = events ?? [];
   const totals = summary(loaded);
+  const streak = useMemo(() => streakSummary(loaded), [loaded]);
+  const units = useMemo(() => unitProgress(loaded), [loaded]);
+  const review = useMemo(() => reviewQueue(loaded, { limit: 10 }), [loaded]);
+
+  const launchLesson = useCallback((lesson: LessonDef) => {
+    setMode({ kind: 'lesson', lesson });
+  }, []);
+
+  const retryReview = useCallback((item: ReviewItem) => {
+    const pinned = [tossupFromReview(item)];
+    // Synthesise a one-off lesson def for the retry so the session has
+    // something to label itself with. The id is namespaced so it does not
+    // collide with a real unit lesson in `unitProgress`.
+    const lesson: LessonDef = {
+      id: `review-${item.questionId}`,
+      index: 1,
+      unit: item.category,
+      subcategory: item.subcategory,
+      title: `Review: ${item.subcategory}`,
+    };
+    setMode({ kind: 'lesson', lesson, pinned });
+  }, []);
+
+  const exitLesson = useCallback(() => {
+    setMode({ kind: 'browsing' });
+  }, []);
+
+  if (mode.kind === 'lesson') {
+    return (
+      <LessonSession
+        lesson={mode.lesson}
+        pinned={mode.pinned}
+        onExit={exitLesson}
+        onProgress={reload}
+      />
+    );
+  }
 
   return (
     <>
@@ -86,15 +148,6 @@ export default function Learn() {
             <PillRow>
               <StatPill label="power" value={pct(totals.powerRate)} tone="gold" />
               <StatPill label="neg" value={pct(totals.negRate)} tone="bad" />
-              <StatPill
-                label="buzz"
-                value={
-                  totals.meanBuzzFraction === null
-                    ? 'n/a'
-                    : pct(totals.meanBuzzFraction)
-                }
-                title="Mean buzz point as a fraction of question length"
-              />
               <StatPill label="points" value={String(totals.points)} />
               <StatPill label="weeks" value={String(totals.weeksTracked)} />
             </PillRow>
@@ -106,78 +159,55 @@ export default function Learn() {
               </p>
             ) : null}
 
-            <div className="learn">
-              <WeakSpots events={events} />
-              <MissesPlaceholder events={events} wpm={settings.wpm} />
-              <Lessons events={events} />
-              <ProgressChapter events={events} />
+            <div className="learn-duo">
+              <section className="learn-duo__section" aria-labelledby="learn-streak-heading">
+                <h2 className="sr-only" id="learn-streak-heading">
+                  Streak and progress
+                </h2>
+                <StreakHeader summary={streak} />
+              </section>
+
+              <section className="learn-duo__section" aria-labelledby="learn-units-heading">
+                <h2 className="learn-duo__heading" id="learn-units-heading">
+                  Units
+                </h2>
+                <div className="units">
+                  {units.map((unit) => (
+                    <UnitPath
+                      key={unit.unit.category}
+                      progress={unit}
+                      onSelectLesson={launchLesson}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="learn-duo__section" aria-labelledby="learn-review-heading">
+                <h2 className="learn-duo__heading" id="learn-review-heading">
+                  Review queue
+                </h2>
+                {review.length === 0 ? (
+                  <p className="review-empty">
+                    Nothing to review yet. Missed tossups show up here a day
+                    after you see them, ordered by how often they have tripped
+                    you up.
+                  </p>
+                ) : (
+                  <div className="review-list">
+                    {review.map((item) => (
+                      <ReviewCard
+                        key={item.questionId}
+                        item={item}
+                        onRetry={retryReview}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           </>
         )}
       </div>
     </>
-  );
-}
-
-/**
- * Stand-in for the owned chapter 2. It renders the frame and the real empty
- * state, and says plainly that the interaction itself is not here yet. It does
- * not attempt the replay rail.
- */
-function MissesPlaceholder({
-  events,
-  wpm,
-}: {
-  events: AttemptEvent[];
-  wpm: number;
-}) {
-  const misses = missedQuestions(events, { wpm, limit: 25 });
-  const knowable = misses.filter((m) => m.knowableWordIndex !== null).length;
-
-  return (
-    <section className="chapter chapter--inset" aria-labelledby="learn-misses">
-      <header className="chapter__head">
-        <h2 className="chapter__label" id="learn-misses">
-          Misses
-        </h2>
-        <span className="chapter__status">
-          {misses.length === 0
-            ? 'nothing missed yet'
-            : `${misses.length} recent, ${knowable} answerable earlier`}
-        </span>
-      </header>
-
-      <div className="chapter__body">
-        {misses.length === 0 ? (
-          <div className="empty empty--act">
-            <p className="empty__line">
-              No missed tossups on record. Go drill something.
-            </p>
-            <p className="empty__hint">
-              This chapter replays the questions you got wrong and marks the
-              first word that mentioned something you have already answered
-              correctly elsewhere. It needs a miss to work with, and it is the
-              most useful thing on this tab once it has one.
-            </p>
-          </div>
-        ) : (
-          <div className="misses-placeholder">
-            <span className="misses-placeholder__tag">
-              chapter 2 not wired up yet
-            </span>
-            <p className="empty__line">
-              {misses.length} missed tossup{misses.length === 1 ? '' : 's'} are
-              ready for replay, {knowable} of them carrying a clue you have
-              answered correctly before.
-            </p>
-            <p className="empty__hint">
-              The buzz-point replay itself is owned by another card. Its
-              component is <code>src/learn/chapters/Misses.tsx</code>; this
-              placeholder stands in its slot so the chapter rhythm holds.
-            </p>
-          </div>
-        )}
-      </div>
-    </section>
   );
 }

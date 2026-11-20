@@ -88,6 +88,37 @@ export async function append(e: AttemptEvent): Promise<void> {
   }
 }
 
+/**
+ * Merge a patch into an existing event row. Used by the Learn tab's lesson
+ * session to tag already-appended events with their `lessonId`/`lessonSeq`
+ * after the Tossup engine has resolved them. A missing row (never persisted,
+ * or already cleared) is a silent no-op: the tag is a convenience, never the
+ * source of truth for scoring.
+ */
+export async function updateEvent(
+  id: string,
+  patch: Partial<AttemptEvent>,
+): Promise<void> {
+  try {
+    const existing = await tx<AttemptEvent | undefined>(
+      'readonly',
+      (store) => store.get(id) as IDBRequest<AttemptEvent | undefined>,
+    );
+    if (!existing) return;
+    const merged: AttemptEvent = { ...existing, ...patch, id: existing.id };
+    await tx('readwrite', (store) => store.put(merged) as IDBRequest<IDBValidKey>);
+  } catch {
+    usingFallback = true;
+    const idx = memoryFallback.findIndex((e) => e.id === id);
+    if (idx >= 0) {
+      const existing = memoryFallback[idx];
+      if (existing) {
+        memoryFallback[idx] = { ...existing, ...patch, id: existing.id };
+      }
+    }
+  }
+}
+
 export async function all(): Promise<AttemptEvent[]> {
   try {
     const rows = await tx<AttemptEvent[]>(
