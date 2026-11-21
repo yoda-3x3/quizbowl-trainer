@@ -46,6 +46,7 @@ import { parseQuestion } from '../../src/engine/power';
 import { TossupQueue, defaultFilters } from '../../src/data/qbreader';
 import { d1BracketStore, recordBracketMatchResult } from './brackets';
 import { d1RatingStore } from './ratings';
+import { d1QuickPlayStore, recordQuickPlayMatchResult } from './quickplay';
 
 export interface Env {
   ROOM: DurableObjectNamespace;
@@ -161,16 +162,18 @@ export class Room implements DurableObject {
         entrantAKey?: string;
         entrantBKey?: string;
         regulationTossups?: number;
+        kind?: 'bracket' | 'quickplay';
       };
       if (this.room.code === '????' && typeof body.code === 'string') {
         this.room.code = body.code.toUpperCase();
       }
       attachMatch(this.room, {
-        tournamentId: Number(body.tournamentId),
+        tournamentId: Number(body.tournamentId) || 0,
         matchId: Number(body.matchId),
         entrantAKey: String(body.entrantAKey ?? ''),
         entrantBKey: String(body.entrantBKey ?? ''),
         regulationTossups: Number(body.regulationTossups) || 20,
+        kind: body.kind,
       });
       await this.ctx.storage.put('room', this.room);
       return Response.json({ ok: true });
@@ -375,17 +378,39 @@ export class Room implements DurableObject {
 
   /**
    * Once a match room's regulation tossups are all played, report the side
-   * with the higher score to the bracket. `recordBracketMatchResult` already
-   * refuses a match that isn't 'ready', so a retried/duplicate call here
-   * (e.g. after a DO hibernation) is harmless — no separate "already
-   * reported" flag needed. A tie reports nothing; the TD resolves it by hand
-   * via the bracket panel.
+   * with the higher score to whichever store the match belongs to (bracket
+   * or Quick Play). Both `recordBracketMatchResult` and
+   * `recordQuickPlayMatchResult` already refuse a match that isn't 'ready',
+   * so a retried/duplicate call here (e.g. after a DO hibernation) is
+   * harmless — no separate "already reported" flag needed.
+   *
+   * A bracket tie reports nothing; the TD resolves it by hand via the
+   * bracket panel. A Quick Play tie still reports (as "finished" with no
+   * winner and no rating change) since there's no TD to resolve it —
+   * leaving it 'ready' forever would strand both players' match history.
    */
   private async reportMatchResultIfOver(now: number): Promise<void> {
     if (!this.env.DB) return;
     const match = this.room.match;
     if (!match || !isMatchOver(this.room)) return;
     const { a, b } = match.sideScores;
+
+    if (match.kind === 'quickplay') {
+      const winnerUserId = a === b ? null : userIdOf(a > b ? match.entrantAKey : match.entrantBKey);
+      try {
+        await recordQuickPlayMatchResult(
+          d1QuickPlayStore(this.env.DB),
+          d1RatingStore(this.env.DB),
+          match.matchId,
+          winnerUserId,
+          now,
+        );
+      } catch (err) {
+        console.error('quick play match result report failed', err);
+      }
+      return;
+    }
+
     if (a === b) return;
     const winnerKey = a > b ? match.entrantAKey : match.entrantBKey;
     try {
@@ -548,6 +573,12 @@ export class Room implements DurableObject {
       await this.deregisterLive();
     });
   }
+}
+
+/** Parses a Quick Play entrant key (`u:<id>`) back into a user id, or null. */
+function userIdOf(key: string): number | null {
+  const m = /^u:(\d+)$/.exec(key);
+  return m && m[1] !== undefined ? Number(m[1]) : null;
 }
 
 /**

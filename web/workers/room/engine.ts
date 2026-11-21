@@ -50,6 +50,8 @@ export interface RoomMatchState {
   regulationTossups: number;
   tossupsPlayed: number;
   sideScores: { a: number; b: number };
+  /** 'bracket' (default) or 'quickplay'. See MatchSnapshot['kind']. */
+  kind: 'bracket' | 'quickplay';
 }
 
 export interface RoomState {
@@ -109,6 +111,7 @@ export function attachMatch(
     entrantAKey: string;
     entrantBKey: string;
     regulationTossups: number;
+    kind?: 'bracket' | 'quickplay';
   },
 ): void {
   if (s.match) return;
@@ -120,6 +123,7 @@ export function attachMatch(
     regulationTossups: info.regulationTossups,
     tossupsPlayed: 0,
     sideScores: { a: 0, b: 0 },
+    kind: info.kind ?? 'bracket',
   };
 }
 
@@ -137,6 +141,7 @@ function matchSnapshotOf(s: RoomState): MatchSnapshot | null {
     tossupsPlayed: s.match.tossupsPlayed,
     sideScores: { ...s.match.sideScores },
     over: isMatchOver(s),
+    kind: s.match.kind,
   };
 }
 

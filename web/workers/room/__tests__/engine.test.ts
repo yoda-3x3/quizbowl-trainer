@@ -528,4 +528,24 @@ describe('bracket match attachment', () => {
     expect(s.match?.tossupsPlayed).toBe(1);
     expect(s.match?.sideScores).toEqual({ a: 0, b: 0 });
   });
+
+  it("defaults to 'bracket' kind when the caller omits it", () => {
+    const s = startMatchRoom();
+    expect(s.match?.kind).toBe('bracket');
+    expect(snapshot(s, T0).match?.kind).toBe('bracket');
+  });
+
+  it("carries a 'quickplay' kind through to the snapshot", () => {
+    const s = createRoom('ABCD');
+    attachMatch(s, {
+      tournamentId: 0,
+      matchId: 7,
+      entrantAKey: 'u:1',
+      entrantBKey: 'u:2',
+      regulationTossups: 5,
+      kind: 'quickplay',
+    });
+    expect(s.match?.kind).toBe('quickplay');
+    expect(snapshot(s, T0).match?.kind).toBe('quickplay');
+  });
 });

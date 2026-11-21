@@ -37,6 +37,12 @@
  *   POST /api/tournaments/:id/bracket/matches/:matchId/result  -> TD records a winner
  *   POST /api/tournaments/:id/bracket/matches/:matchId/confirm -> TD confirms advance (manual mode)
  *   POST /api/tournaments/:id/bracket/matches/:matchId/room    -> open/rejoin this match's H2H room
+ *   POST /api/quickplay/queue              -> join the public matchmaking queue (pairs immediately if possible)
+ *   POST /api/quickplay/queue/leave        -> leave the public queue
+ *   GET  /api/quickplay/queue/status       -> whether the caller is still queued
+ *   POST /api/quickplay/private            -> create a private (unrated) game, returns an invite code
+ *   POST /api/quickplay/private/:code/join -> redeem an invite code, opens the match room
+ *   GET  /api/quickplay/matches/:id        -> a Quick Play match's state (participants only)
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -50,6 +56,7 @@ import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
 import { d1PacketStore, handlePackets } from './packets';
 import { d1RatingStore, handleRatings } from './ratings';
 import { d1BracketStore, handleBrackets, type MatchRoomOpener } from './brackets';
+import { d1QuickPlayStore, handleQuickPlay, type QuickPlayRoomOpener } from './quickplay';
 
 export { Room };
 
@@ -92,7 +99,24 @@ function matchRoomOpenerFor(env: Env): MatchRoomOpener {
           'x-internal-secret': env.INTERNAL_SECRET ?? '',
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ code, ...info }),
+        body: JSON.stringify({ code, kind: 'bracket', ...info }),
+      });
+    },
+  };
+}
+
+/** Same bridge as `matchRoomOpenerFor`, but for Quick Play matches. */
+function quickPlayRoomOpenerFor(env: Env): QuickPlayRoomOpener {
+  return {
+    async attach(code, info): Promise<void> {
+      const stub = env.ROOM.get(env.ROOM.idFromName(code));
+      await stub.fetch('https://do/__internal/attach-match', {
+        method: 'POST',
+        headers: {
+          'x-internal-secret': env.INTERNAL_SECRET ?? '',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ code, kind: 'quickplay', ...info }),
       });
     },
   };
@@ -213,6 +237,22 @@ export default {
         authStore,
         ratingStore,
         contextFrom(request),
+      );
+      if (response) return response;
+    }
+
+    // Quick Play: public matchmaking (rated) + private invite-code games
+    // (unrated). Reuses the auth store for session resolution and the same
+    // Room DO as H2H bracket matches.
+    if (url.pathname.startsWith('/api/quickplay/')) {
+      const authStore = d1Store(env.DB);
+      const qpStore = d1QuickPlayStore(env.DB);
+      const response = await handleQuickPlay(
+        request,
+        authStore,
+        qpStore,
+        contextFrom(request),
+        quickPlayRoomOpenerFor(env),
       );
       if (response) return response;
     }

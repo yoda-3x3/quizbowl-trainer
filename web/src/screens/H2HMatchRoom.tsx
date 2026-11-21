@@ -19,9 +19,19 @@ export interface H2HMatchRoomProps {
   roomCode: string;
   side: Side | null;
   onExit(): void;
+  /** Defaults to "H2H Match" (bracket matches); Quick Play passes its own. */
+  title?: string;
+  /** Shown on a tied regulation finish. Defaults to the bracket TD note. */
+  tieNote?: string;
 }
 
-export default function H2HMatchRoom({ roomCode, side, onExit }: H2HMatchRoomProps) {
+export default function H2HMatchRoom({
+  roomCode,
+  side,
+  onExit,
+  title = 'H2H Match',
+  tieNote = 'the match tied — the TD will resolve this bracket slot by hand.',
+}: H2HMatchRoomProps) {
   const auth = useAuth();
   const name = auth.user?.username ?? 'player';
   const room = useRoom(roomCode, name, '', side ?? undefined);
@@ -79,7 +89,7 @@ export default function H2HMatchRoom({ roomCode, side, onExit }: H2HMatchRoomPro
   return (
     <div className="rooms">
       <Sheet
-        title="H2H Match"
+        title={title}
         aside={
           <Button variant="ghost" small onClick={onExit}>
             Leave
@@ -119,7 +129,7 @@ export default function H2HMatchRoom({ roomCode, side, onExit }: H2HMatchRoomPro
             Regulation is finished
             {match.sideScores.a !== match.sideScores.b
               ? `; ${match.sideScores.a > match.sideScores.b ? 'Side A' : 'Side B'} wins the match.`
-              : '; the match tied — the TD will resolve this bracket slot by hand.'}
+              : `; ${tieNote}`}
           </p>
         </Sheet>
       ) : (

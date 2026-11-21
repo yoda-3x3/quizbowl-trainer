@@ -48,6 +48,12 @@ export interface MatchSnapshot {
   sideScores: { a: number; b: number };
   /** True once `tossupsPlayed` reaches `regulationTossups`. */
   over: boolean;
+  /**
+   * 'bracket' (the default, for back-compat with existing H2H bracket match
+   * rooms) or 'quickplay' for a standalone Quick Play match. Tells room.ts's
+   * reportMatchResultIfOver which store to report the winner to.
+   */
+  kind: 'bracket' | 'quickplay';
 }
 
 /** The question as the room sees it. The answer is never sent while reading. */
