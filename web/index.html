@@ -3,10 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f1216" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0a08" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf6ec" />
     <meta
       name="description"
       content="Quizbowl and Ohio Academic Competition practice: pyramidal tossups, bonuses, ear training and OAC matches."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Futura is a licensed commercial face, not available from Google Fonts.
+      It renders natively wherever it's installed (common on macOS); Century
+      Gothic is the closest Windows-native substitute. Questrial is the free
+      geometric-sans loaded here as the actual fallback for everyone else, so
+      the font stack in theme.css (Futura, Century Gothic, Questrial, ...)
+      always lands on *something* geometric rather than a generic sans.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Questrial&family=Lora:wght@400;500;600&display=swap"
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- iOS reads none of the manifest's icons, so it needs its own link. -->

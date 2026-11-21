@@ -102,28 +102,35 @@ export default function App() {
   return (
     <div className="app" data-theme={theme}>
       <ThemeBackdrop theme={theme} />
-      {tab === 'practice' ? (
-        <Practice
-          view={practice}
-          onStart={setPractice}
-          onExit={toHome}
-          onOpenSettings={() => setTab('settings')}
-        />
-      ) : null}
+      {/* `key={tab}` remounts this wrapper on every tab switch, which is
+          what makes the entrance animation below replay each time — without
+          it, React would just patch the existing DOM and no transition would
+          fire. Each tab's own component is prop-driven from state that lives
+          in App (practice/theme/etc.), so remounting it loses nothing. */}
+      <div className="tab-page" key={tab}>
+        {tab === 'practice' ? (
+          <Practice
+            view={practice}
+            onStart={setPractice}
+            onExit={toHome}
+            onOpenSettings={() => setTab('settings')}
+          />
+        ) : null}
 
-      {tab === 'learn' ? <Learn /> : null}
+        {tab === 'learn' ? <Learn /> : null}
 
-      {tab === 'rooms' ? (
-        <Screen title="Rooms">
-          <Rooms />
-        </Screen>
-      ) : null}
+        {tab === 'rooms' ? (
+          <Screen title="Rooms">
+            <Rooms />
+          </Screen>
+        ) : null}
 
-      {tab === 'tournaments' ? <Tournaments /> : null}
+        {tab === 'tournaments' ? <Tournaments /> : null}
 
-      {tab === 'settings' ? (
-        <SettingsScreen onOpenAdmin={() => setShowAdmin(true)} />
-      ) : null}
+        {tab === 'settings' ? (
+          <SettingsScreen onOpenAdmin={() => setShowAdmin(true)} />
+        ) : null}
+      </div>
 
       {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
 
@@ -181,6 +188,8 @@ function ShortcutsHelp({
           <ShortcutRow keys={['Space']} label="Buzz (while reading)" />
           <ShortcutRow keys={['Enter']} label="Submit answer, or next question" />
           <ShortcutRow keys={['Shift', 'Enter']} label="I don't know (give up, see the answer)" />
+          <ShortcutRow keys={['N']} label="Skip the question, or go to the next one" />
+          <ShortcutRow keys={['S']} label="Star the current question for later" />
           <ShortcutRow keys={['K']} label="Hide or show the current question (for reading aloud)" />
           <ShortcutRow keys={['Y']} label="Copy the current question's ID to the clipboard" />
           <ShortcutRow keys={['Esc']} label="Back to Practice home" />

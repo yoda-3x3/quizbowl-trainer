@@ -1,25 +1,31 @@
 @import './themes.css';
 
+/* Base palette: black + beige, for a system in dark mode (and the default
+   when the OS doesn't report a preference at all). A `prefers-color-scheme:
+   light` media query below swaps these to white + beige instead — the
+   classic theme deliberately has no palette of its own (see themes.css) so
+   that swap is the only place "dark" vs. "light" classic is decided. */
 :root {
-  --bg: #0f1216;
-  --panel: #171c23;
-  --panel-2: #1e242d;
-  --line: #2a323d;
-  --ink: #e7ecf3;
-  --ink-soft: #8b97a7;
-  --accent: #4fc3f7;
+  --bg: #0b0a08;
+  --panel: #1c1813;
+  --panel-2: #26211a;
+  --line: #3c3426;
+  --ink: #f3ede0;
+  --ink-soft: #b9ab8c;
+  --accent: #f2994a;
   --good: #66d17a;
   --bad: #ef5959;
   --gold: #f0c14b;
 
-  --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-read: Georgia, 'Iowan Old Style', serif;
+  --font-ui: Futura, 'Century Gothic', Questrial, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-read: 'Lora', Georgia, 'Iowan Old Style', serif;
 
   /* Motion tokens. Every transition / animation in the app uses these so
      timing and easing stay coherent across screens. Don't vary by theme. */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);   /* most things */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);   /* entrances, big state changes */
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);         /* fades out, dismissals */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1); /* overshoots then settles: button release, celebrations */
 
   --dur-instant: 80ms;    /* micro: focus ring, button press */
   --dur-fast: 160ms;      /* hover, small UI shifts */
@@ -27,6 +33,35 @@
   --dur-slow: 400ms;      /* large transitions, section reveals */
 
   color-scheme: dark;
+}
+
+/* System in light mode: white + beige instead of black + beige. Painted
+   themes (art/science/...) are unaffected — each sets every one of these
+   tokens itself, at higher specificity than :root, regardless of the OS
+   preference, since they're a deliberate aesthetic choice rather than a
+   light/dark pair. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #faf6ec;
+    --panel: #f1e9d6;
+    --panel-2: #e7dcc0;
+    --line: #d2c29a;
+    --ink: #221d13;
+    --ink-soft: #6e6248;
+    color-scheme: light;
+    /* The bright orange reads fine as a button background in either mode,
+       but used as plain text (links, focus highlights, several labels) it
+       falls under 3:1 against a light beige page — a deeper rust keeps the
+       same hue family while staying legible as text on a light background. */
+    --accent: #b5560f;
+    /* Semantic tones tuned for dark panels wash out on a light beige
+       background (same issue the math theme already solved) — darken
+       good/bad/gold so accuracy/power/neg pills stay readable. */
+    --good: #2b7a3f;
+    --bad: #a01818;
+    --gold: #8a6a1a;
+    --gold-dim: #a68f4a;
+  }
 }
 
 * {
@@ -98,6 +133,30 @@ input {
      anchor every child inherits the default dark theme's ink. */
   background: var(--bg);
   color: var(--ink);
+}
+
+/* Wraps whichever tab is active (see App.tsx) so switching tabs replays a
+   short entrance instead of the new screen just popping in. Transparent to
+   layout otherwise — same flex column behavior the topbar/app__body pair
+   had as direct .app children before this wrapper existed, so sticky/fixed
+   positioning inside (topbar, tab bar) is unaffected. */
+.tab-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: qbt-page-in var(--dur-medium) var(--ease-emphasized);
+}
+
+@keyframes qbt-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .app__body {
@@ -318,8 +377,12 @@ input {
   color: var(--ink);
   font-size: 13px;
   letter-spacing: 0.2px;
+  transform: scale(1);
+  /* Pressing down is quick and linear (instant feedback); releasing
+     overshoots past full size and settles — the "pop" that makes a press
+     feel satisfying rather than just a flat state change. */
   transition: opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-instant) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce),
     border-color var(--dur-fast) var(--ease-standard),
     background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
@@ -330,7 +393,8 @@ input {
 }
 
 .btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.93);
+  transition-duration: var(--dur-instant);
 }
 
 .btn:disabled {
@@ -356,6 +420,8 @@ input {
 }
 
 .btn--buzz {
+  position: relative;
+  overflow: hidden;
   background: var(--bad);
   border-color: var(--bad);
   color: #fff;
@@ -363,6 +429,37 @@ input {
   letter-spacing: 0.8px;
   min-height: 56px;
   font-size: 15px;
+}
+
+/* The core interaction of the whole app earns a bigger press and a ripple
+   pulse, not just the shared button scale-down. */
+.btn--buzz:active:not(:disabled) {
+  transform: scale(0.88);
+}
+
+.btn--buzz:active:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  animation: qbt-buzz-ripple 380ms var(--ease-exit);
+  pointer-events: none;
+}
+
+@keyframes qbt-buzz-ripple {
+  from {
+    opacity: 1;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
 }
 
 .btn--block {
@@ -460,9 +557,16 @@ input {
   border-radius: 999px;
   padding: 7px 11px;
   font-size: 12px;
+  transform: scale(1);
   transition: color var(--dur-fast) var(--ease-standard),
     border-color var(--dur-fast) var(--ease-standard),
-    background-color var(--dur-fast) var(--ease-standard);
+    background-color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce);
+}
+
+.chip:active {
+  transform: scale(0.92);
+  transition-duration: var(--dur-instant);
 }
 
 .chip[aria-pressed="true"] {
@@ -543,6 +647,47 @@ input {
 
 .pill--accent .pill__value {
   color: var(--accent);
+}
+
+/* --- star toggle ------------------------------------------------------------ */
+
+.star-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  transform: scale(1);
+  transition: color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce);
+}
+
+.star-toggle:hover {
+  color: var(--gold);
+}
+
+.star-toggle:active {
+  transform: scale(0.8) rotate(-8deg);
+  transition-duration: var(--dur-instant);
+}
+
+.star-toggle--on {
+  color: var(--gold);
+  /* A little pop the moment it becomes starred, not just a color swap. */
+  animation: qbt-star-pop 320ms var(--ease-bounce);
+}
+
+@keyframes qbt-star-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.5);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* --- reading surface ----------------------------------------------------- */
@@ -715,8 +860,9 @@ input {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--ink);
+  transform: scale(1);
   transition: border-color var(--dur-fast) var(--ease-standard),
-    transform var(--dur-instant) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce),
     box-shadow var(--dur-fast) var(--ease-standard);
 }
 
@@ -749,7 +895,8 @@ input {
 }
 
 .mode-card:active {
-  transform: translateY(1px);
+  transform: scale(0.97);
+  transition-duration: var(--dur-instant);
 }
 
 .mode-card__title {
@@ -764,6 +911,51 @@ input {
 }
 
 /* --- bonus --------------------------------------------------------------- */
+
+/* A full house (every part correct) earns a one-shot celebration: a bright
+   diagonal sweep across the card plus a quick green glow pulse. Applied by
+   Bonus.tsx the instant the last part resolves and every directive was
+   'accept'; the class never gets removed afterward (nothing reruns these
+   @keyframes), so this only ever plays once per bonus. */
+.bonus-sweep {
+  position: relative;
+  overflow: hidden;
+  animation: qbt-bonus-glow 900ms var(--ease-standard);
+}
+
+.bonus-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--good) 55%, white 45%) 50%,
+    transparent 70%
+  );
+  opacity: 0.8;
+  transform: translateX(-130%);
+  animation: qbt-bonus-sweep 900ms var(--ease-standard);
+}
+
+@keyframes qbt-bonus-sweep {
+  to {
+    transform: translateX(130%);
+  }
+}
+
+@keyframes qbt-bonus-glow {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
+  }
+  25% {
+    box-shadow: 0 0 28px 3px color-mix(in srgb, var(--good) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
+  }
+}
 
 .part {
   border-top: 1px solid var(--line);

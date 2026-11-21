@@ -20,6 +20,7 @@ import { all, append, isEphemeral } from '../engine/log';
 import { summary } from '../learn/derive';
 import { TossupQueue } from '../data/qbreader';
 import { cacheTossups, cachedTossups, pickUnseen } from '../data/cache';
+import { isStarred, star, unstar } from '../data/starred';
 import LiveArtPanel from '../art/LiveArtPanel';
 import LiveEarPanel from '../ear/LiveEarPanel';
 import PracticeSidebar from './PracticeSidebar';
@@ -93,6 +94,12 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
   // a mysterious blank card.
   const [hideQuestion, setHideQuestion] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Whether `current` is in the starred list. Reloaded per question (not
+  // just reset to false) so replaying something starred earlier still shows
+  // as starred.
+  const [starred, setStarred] = useState(false);
+  // Transient confirmation text after toggling the star, same pattern as `copied`.
+  const [starSaved, setStarSaved] = useState(false);
   // Protest sheet is opt-in via the `onProtest` prop: solo practice never sees
   // it because the prop stays undefined.
   const [protestOpen, setProtestOpen] = useState(false);
@@ -180,6 +187,9 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
     setCurrent(next);
     setHideQuestion(false);
     setCopied(false);
+    setStarred(false);
+    setStarSaved(false);
+    void isStarred(next.id).then(setStarred);
     setProtestOpen(false);
     setProtestReason('');
     setProtestError(null);
@@ -211,10 +221,27 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
     if (reader.pendingPrompt) setGiven('');
   }, [reader.pendingPrompt]);
 
+  const toggleStar = useCallback(() => {
+    if (!current) return;
+    if (starred) {
+      setStarred(false);
+      void unstar(current.id);
+    } else {
+      setStarred(true);
+      void star(current);
+    }
+    setStarSaved(true);
+    window.setTimeout(() => setStarSaved(false), 1500);
+  }, [current, starred]);
+
   // Space buzzes, but never while a text field has focus: in the buzzed state
   // the field is focused and a space there must type a space.
   //
   // `k` and `y` mirror QB Reader (show/hide last question, copy question id).
+  // `s` stars the current question for later; `n` skips it — while reading
+  // or buzzed that resolves it with an empty answer (same mechanism as "I
+  // don't know"), and once resolved it advances to the next question, so `n`
+  // reads as a single "move on" key regardless of phase.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const target = ev.target as HTMLElement | null;
@@ -263,11 +290,25 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
           .catch(() => {
             /* clipboard refused; nothing to tell the user */
           });
+        return;
+      }
+      if ((ev.key === 's' || ev.key === 'S') && current) {
+        ev.preventDefault();
+        toggleStar();
+        return;
+      }
+      if ((ev.key === 'n' || ev.key === 'N') && current) {
+        ev.preventDefault();
+        if (reader.phase === 'resolved') {
+          void loadNext();
+        } else if (reader.phase === 'reading' || canAnswer) {
+          submit('');
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [buzz, current, loadNext, reader.phase]);
+  }, [buzz, canAnswer, current, loadNext, reader.phase, submit, toggleStar]);
 
   const onSubmit = useCallback(
     (ev: FormEvent) => {
@@ -363,14 +404,30 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
                 ? 'loading'
                 : 'no question'}
           </span>
-          <span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {current
               ? `${current.setName}${current.setYear ? ` / ${current.setYear}` : ''} / diff ${current.difficulty}`
               : ''}
             {queueRef.current?.isOffline ? ' / offline pack' : ''}
             {fromCache ? ' / cached' : ''}
+            {current ? (
+              <button
+                type="button"
+                className={`star-toggle${starred ? ' star-toggle--on' : ''}`}
+                onClick={toggleStar}
+                aria-pressed={starred}
+                title={starred ? 'Starred — press S to unstar' : 'Star this question for later (S)'}
+              >
+                {starred ? '★' : '☆'}
+              </button>
+            ) : null}
           </span>
         </div>
+        {starSaved ? (
+          <p className="tiny muted" role="status">
+            {starred ? 'Starred for later.' : 'Removed from starred.'}
+          </p>
+        ) : null}
 
         {hideQuestion ? (
           <p className="read read--card muted" ref={readCardRef}>
