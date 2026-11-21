@@ -25,9 +25,19 @@ import {
 import { Button, Field, Sheet, TextInput } from '../ui';
 import { createRoom } from '../room/client';
 import { useRoom } from '../room/useRoom';
+import { CODE_ALPHABET, CODE_LENGTH } from '../../workers/room/protocol';
 import './Rooms.css';
 
-const CODE_LEN = 4;
+const CODE_LEN = CODE_LENGTH;
+// Matches protocol.ts's makeRoomCode() alphabet exactly. A plain [^A-Z] filter
+// here previously stripped every digit the generator can produce (2-9),
+// which made most generated codes literally unjoinable through this input.
+const CODE_CHARS = new RegExp(`[^${CODE_ALPHABET}]`, 'g');
+
+/** Exported for a direct unit test; see __tests__/roomsCodeEntry.test.ts. */
+export function sanitizeCodeInput(raw: string): string {
+  return raw.toUpperCase().replace(CODE_CHARS, '').slice(0, CODE_LEN);
+}
 
 export default function Rooms({ baseUrl = '' }: { baseUrl?: string }) {
   const [name, setName] = useState('');
@@ -107,7 +117,7 @@ export default function Rooms({ baseUrl = '' }: { baseUrl?: string }) {
 
       <Sheet title="Join with a code">
         <p className="tiny muted">
-          Four letters. Not case-sensitive.
+          Four characters. Not case-sensitive.
         </p>
         <CodeEntry
           value={codeInput}
@@ -150,10 +160,7 @@ function CodeEntry({
   const ref = useRef<HTMLInputElement>(null);
 
   const handle = (e: ChangeEvent<HTMLInputElement>) => {
-    const next = e.target.value
-      .toUpperCase()
-      .replace(/[^A-Z]/g, '')
-      .slice(0, CODE_LEN);
+    const next = sanitizeCodeInput(e.target.value);
     onChange(next);
     if (next.length === CODE_LEN) onComplete(next);
   };
