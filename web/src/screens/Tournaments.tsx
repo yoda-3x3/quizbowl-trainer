@@ -20,6 +20,7 @@ import {
 } from '../tournaments';
 import TournamentDetail from './TournamentDetail';
 import Leaderboard from './Leaderboard';
+import QuickPlay from './QuickPlay';
 import './Tournaments.css';
 
 type GroupKey = 'open' | 'running' | 'finished';
@@ -44,6 +45,7 @@ export default function Tournaments() {
   const [openId, setOpenId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showQuickPlay, setShowQuickPlay] = useState(false);
 
   const byState = useMemo(() => {
     const out: Record<GroupKey, TournamentSummary[]> = {
@@ -73,6 +75,10 @@ export default function Tournaments() {
     return <Leaderboard onExit={() => setShowLeaderboard(false)} />;
   }
 
+  if (showQuickPlay) {
+    return <QuickPlay onExit={() => setShowQuickPlay(false)} />;
+  }
+
   const canCreate = auth.user !== null;
 
   return (
@@ -90,6 +96,12 @@ export default function Tournaments() {
       </header>
 
       <div className="app__body">
+        {canCreate ? (
+          <Button variant="primary" block onClick={() => setShowQuickPlay(true)}>
+            Quick Play
+          </Button>
+        ) : null}
+
         {canCreate ? (
           <Button
             variant="primary"
