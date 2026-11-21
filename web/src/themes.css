@@ -43,16 +43,18 @@
   z-index: -1;
 }
 
-/* Classic — the dark neutral palette. No backdrop; defaults already apply. */
+/* Classic — the dark neutral palette, now with the app's new default
+   orange accent and Manrope/Lora font pairing (previously light blue +
+   Segoe UI/Georgia). Still explicit so a theme switch back to classic
+   re-asserts every token, including over a painted theme's backdrop. */
 .app[data-theme='classic'] {
-  /* Explicit so a theme switch back to classic re-asserts every token. */
   --bg: #0f1216;
   --panel: #171c23;
   --panel-2: #1e242d;
   --line: #2a323d;
   --ink: #e7ecf3;
   --ink-soft: #8b97a7;
-  --accent: #4fc3f7;
+  --accent: #f2994a;
   --display-font: var(--font-ui);
   --text-font: var(--font-read);
 }

@@ -2,7 +2,7 @@
  * Generates the PWA / native launcher icons into public/icons/.
  *
  * There is no brand yet, so the mark is deliberately plain: a buzzer dot in
- * --accent (#4fc3f7) on the --bg field (#0f1216), with a thin accent ring
+ * --accent (#f2994a) on the --bg field (#0f1216), with a thin accent ring
  * around it so the shape still reads as a button rather than a blob at 48px.
  *
  * Written as a raw PNG encoder on top of node:zlib because the project has no
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'icons');
 
 const BG = [0x0f, 0x12, 0x16];
-const ACCENT = [0x4f, 0xc3, 0xf7];
+const ACCENT = [0xf2, 0x99, 0x4a];
 
 function crc32(buf) {
   let c = ~0;

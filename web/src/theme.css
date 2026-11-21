@@ -7,13 +7,13 @@
   --line: #2a323d;
   --ink: #e7ecf3;
   --ink-soft: #8b97a7;
-  --accent: #4fc3f7;
+  --accent: #f2994a;
   --good: #66d17a;
   --bad: #ef5959;
   --gold: #f0c14b;
 
-  --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-read: Georgia, 'Iowan Old Style', serif;
+  --font-ui: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-read: 'Lora', Georgia, 'Iowan Old Style', serif;
 
   /* Motion tokens. Every transition / animation in the app uses these so
      timing and easing stay coherent across screens. Don't vary by theme. */
