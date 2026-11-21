@@ -649,6 +649,47 @@ input {
   color: var(--accent);
 }
 
+/* --- star toggle ------------------------------------------------------------ */
+
+.star-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  transform: scale(1);
+  transition: color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce);
+}
+
+.star-toggle:hover {
+  color: var(--gold);
+}
+
+.star-toggle:active {
+  transform: scale(0.8) rotate(-8deg);
+  transition-duration: var(--dur-instant);
+}
+
+.star-toggle--on {
+  color: var(--gold);
+  /* A little pop the moment it becomes starred, not just a color swap. */
+  animation: qbt-star-pop 320ms var(--ease-bounce);
+}
+
+@keyframes qbt-star-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.5);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* --- reading surface ----------------------------------------------------- */
 
 .read {

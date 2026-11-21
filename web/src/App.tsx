@@ -188,6 +188,8 @@ function ShortcutsHelp({
           <ShortcutRow keys={['Space']} label="Buzz (while reading)" />
           <ShortcutRow keys={['Enter']} label="Submit answer, or next question" />
           <ShortcutRow keys={['Shift', 'Enter']} label="I don't know (give up, see the answer)" />
+          <ShortcutRow keys={['N']} label="Skip the question, or go to the next one" />
+          <ShortcutRow keys={['S']} label="Star the current question for later" />
           <ShortcutRow keys={['K']} label="Hide or show the current question (for reading aloud)" />
           <ShortcutRow keys={['Y']} label="Copy the current question's ID to the clipboard" />
           <ShortcutRow keys={['Esc']} label="Back to Practice home" />
