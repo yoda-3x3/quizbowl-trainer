@@ -94,18 +94,19 @@ export class RoomClient {
     this.closedByUs = false;
     this.events.connection?.(this.attempts === 0 ? 'connecting' : 'reconnecting');
 
-    // Cloudflare Pages Functions do not forward WebSocket upgrades (the edge
-    // rejects the handshake with HTTP 400), so when we are served from a
-    // pages.dev host, route the WS directly to the Rooms Worker. HTTP /api/*
-    // still goes through the Pages proxy.
-    const host =
-      typeof window !== 'undefined' ? window.location.hostname : '';
-    const wsOrigin =
-      !this.baseUrl && /\.pages\.dev$/.test(host)
-        ? 'https://quizbowl-rooms.vishruthvikram2029.workers.dev'
-        : this.baseUrl;
+    // Route through the same same-origin Pages Function proxy as every HTTP
+    // /api/* call (functions/api/[[path]].ts forwards the Upgrade header
+    // fine — confirmed live). An earlier version special-cased *.pages.dev
+    // hosts to bypass the proxy and connect straight to the production
+    // `quizbowl-rooms` Worker, on the premise that Pages Functions couldn't
+    // forward websocket upgrades; that premise no longer holds, and the
+    // bypass silently sent every non-prod environment's live room traffic to
+    // production's Durable Objects instead of its own (`prev-`/`qa-`/`dev-
+    // quizbowl-rooms`), so match data, scores and ratings for a live room
+    // and its reported match result never matched what that environment's
+    // HTTP API saw. Always using the proxy keeps WS and HTTP on one path.
     const url = new URL(
-      `${wsOrigin}/api/room/${this.code}/ws`,
+      `${this.baseUrl}/api/room/${this.code}/ws`,
       window.location.href,
     );
     url.protocol = url.protocol.replace('http', 'ws');
