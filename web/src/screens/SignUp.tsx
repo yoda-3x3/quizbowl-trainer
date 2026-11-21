@@ -79,6 +79,7 @@ export default function SignUp({ onDone, onSwitchToSignIn, onCancel }: SignUpPro
       <form onSubmit={submit}>
         <Field
           label="username"
+          error={Boolean(uHint)}
           hint={
             uHint ?? '3 to 32 characters, letters, digits and underscores.'
           }
@@ -93,6 +94,7 @@ export default function SignUp({ onDone, onSwitchToSignIn, onCancel }: SignUpPro
         </Field>
         <Field
           label="password"
+          error={Boolean(pHint)}
           hint={pHint ?? 'At least 8 characters.'}
         >
           <TextInput
@@ -104,7 +106,15 @@ export default function SignUp({ onDone, onSwitchToSignIn, onCancel }: SignUpPro
         </Field>
         <Field
           label="confirm password"
-          hint={cMismatch ? 'The two passwords do not match.' : undefined}
+          error={cMismatch}
+          success={confirm.length > 0 && confirm === password && password.length >= 8}
+          hint={
+            cMismatch
+              ? 'The two passwords do not match.'
+              : confirm.length > 0 && confirm === password && password.length >= 8
+                ? 'Passwords match.'
+                : undefined
+          }
         >
           <TextInput
             type="password"

@@ -128,7 +128,7 @@ export default function Learn() {
 
   return (
     <>
-      <header className="topbar">
+      <header className="topbar topbar--learn">
         <h1 className="topbar__title">Learn</h1>
         <div className="topbar__right">
           <StatPill label="heard" value={String(totals.heard)} />

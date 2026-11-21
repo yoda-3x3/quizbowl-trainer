@@ -20,6 +20,7 @@ import AdminUsers from './admin/Users';
 import AdminRooms from './admin/Rooms';
 import AdminPackets from './admin/Packets';
 import AdminProtests from './admin/Protests';
+import '../admin.css';
 
 export type AdminTab = 'users' | 'rooms' | 'packets' | 'protests';
 
@@ -38,9 +39,11 @@ export default function Admin({ onExit }: AdminProps) {
   const auth = useAuth();
   const [tab, setTab] = useState<AdminTab>('users');
 
+  const gated = auth.loading || !auth.user || auth.user.role !== 'admin';
+
   return (
     <>
-      <header className="topbar">
+      <header className={gated ? 'topbar' : 'topbar admin-plain'}>
         <h1 className="topbar__title">Admin</h1>
         {onExit ? (
           <div className="topbar__right">
@@ -70,17 +73,11 @@ export default function Admin({ onExit }: AdminProps) {
             </p>
           </Sheet>
         ) : (
-          <>
+          <div className="admin-plain">
             <nav
-              className="admin__tabs"
+              className="admin-plain__nav"
               role="tablist"
               aria-label="Admin sections"
-              style={{
-                display: 'flex',
-                gap: 8,
-                flexWrap: 'wrap',
-                marginBottom: 12,
-              }}
             >
               {TABS.map((t) => (
                 <button
@@ -89,18 +86,6 @@ export default function Admin({ onExit }: AdminProps) {
                   role="tab"
                   aria-selected={tab === t.id}
                   onClick={() => setTab(t.id)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: 4,
-                    border: '1px solid var(--line)',
-                    background:
-                      tab === t.id
-                        ? 'var(--accent, var(--surface-2, var(--panel-2)))'
-                        : 'var(--surface-2, var(--panel-2))',
-                    color: 'var(--ink)',
-                    fontWeight: tab === t.id ? 600 : 400,
-                    cursor: 'pointer',
-                  }}
                 >
                   {t.label}
                 </button>
@@ -111,7 +96,7 @@ export default function Admin({ onExit }: AdminProps) {
             {tab === 'rooms' ? <AdminRooms /> : null}
             {tab === 'packets' ? <AdminPackets /> : null}
             {tab === 'protests' ? <AdminProtests /> : null}
-          </>
+          </div>
         )}
       </div>
     </>

@@ -158,40 +158,33 @@ real tournament stats — not just a score") plus a direct CTA into Practice.
 
 ## NICE TO HAVE
 
-### 10. Learn unit path: locked vs. upcoming lessons look identical
-Both show the same plain outlined circle — no lock icon, no dimming difference between
-"not reached yet" and "in progress." A glance at the path doesn't tell you where you are.
+### 10. ~~Correction~~ — locked/available/completed lesson nodes are already visually
+distinct (filled accent circle, dimmed hollow circle, green check) — see
+`lesson-node--*` in `learn.css:847-869`. No action needed; struck from this list.
 
-### 11. Rooms nickname field has no personality
-Plain text input, no avatar/color picker, in a section that's explicitly social/multiplayer
-and would benefit from a little identity.
+### 11. Rooms nickname field has no personality — DONE
+Added a small colored avatar circle (deterministic hue from the nickname, initial letter)
+next to the nickname field — low-risk, no backend changes, gives the one social surface a
+touch of identity.
 
-### 12. Stat pills (WPM/CLOCK on Practice, HEARD/ACC/POWER/NEG/POINTS/WEEKS on Learn) are
-low-contrast and easy to miss at a glance — consider one larger "today" summary instead of
-a row of small equal-weight pills.
+### 12. Stat pills (WPM/CLOCK on Practice, HEARD/ACC/POWER/NEG/POINTS/WEEKS on Learn) —
+NOT implemented. On closer look the pill label/value contrast is an intentional, fairly
+standard de-emphasis pattern (small caps label, full-contrast value), not a clear bug — a
+"bigger today summary" redesign is a real design call rather than a mechanical fix, and I
+didn't want to guess at it without your input. Left for a follow-up if you still want it
+after seeing the rest of this pass live.
 
 ---
 
-## Admin panel: deliberately plain, "2000s internal tool" restyle
+## Admin panel: deliberately plain, "2000s internal tool" restyle — DONE
 
-Per your direction, Admin shouldn't look or feel like the product — it should look like a
-bare internal tool a developer built in an afternoon. Right now it doesn't: `Admin.tsx`
-(`web/src/screens/Admin.tsx:74-107`) reuses the same `Sheet` component, the same CSS
-custom-property accent color, and hand-styled pill-shaped tab buttons with rounded corners
-and the app's own color tokens — visually indistinguishable from the consumer-facing
-screens.
-
-**Concrete direction for the implementing session:**
-- Drop `Sheet`/the app's card styling in `Admin.tsx` and the four `admin/*.tsx` screens;
-  use plain `<table>`/`<form>` markup with system font stack and default/native browser
-  control styling (no custom CSS classes at all, or a tiny dedicated `admin.css` with just
-  borders and monospace).
-- Replace the inline-styled tab buttons (`Admin.tsx:85-107`) with a plain `<select>` or a
-  row of underlined text links.
-- No accent color, no rounded corners, no dark theme — black text on white (or a minimal
-  gray) is fine and reinforces "this is not the product, it's the back office."
-- This also resolves part of Finding #6 by giving Admin a visual identity that's
-  *intentionally* different rather than just under-designed.
+Implemented: `web/src/admin.css` scopes a `.admin-plain` override (white background, black
+text, Tahoma/Verdana/Arial, square corners, no accent color, native-ish bordered buttons
+and table borders) applied to `Admin.tsx`'s topbar and body once signed in as admin, and
+the tab switcher is now a row of plain underlined links instead of accent-colored pill
+buttons. Visually verified via a static render of the admin markup against the real
+stylesheets. This also resolves part of Finding #6 by giving Admin a visual identity
+that's *intentionally* different rather than just under-designed.
 
 ---
 

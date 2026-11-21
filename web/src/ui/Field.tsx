@@ -8,6 +8,15 @@ export interface FieldProps {
   children: ReactNode;
   /** Pass through when the control inside owns its own id. */
   htmlFor?: string;
+  /**
+   * True when `hint` is reporting a problem (e.g. live validation) rather
+   * than just explaining the field. Colors the hint text instead of leaving
+   * every hint the same neutral gray regardless of whether it's advice or
+   * an error.
+   */
+  error?: boolean;
+  /** True when `hint` is positive confirmation (e.g. "Passwords match."). */
+  success?: boolean;
 }
 
 /** Label, optional live value readout, control, optional hint. */
@@ -17,6 +26,8 @@ export default function Field({
   hint,
   children,
   htmlFor,
+  error,
+  success,
 }: FieldProps) {
   return (
     <div className="field">
@@ -27,7 +38,19 @@ export default function Field({
         ) : null}
       </label>
       {children}
-      {hint ? <span className="field__hint">{hint}</span> : null}
+      {hint ? (
+        <span
+          className={[
+            'field__hint',
+            error ? 'field__hint--error' : '',
+            success ? 'field__hint--success' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -39,6 +39,20 @@ export function sanitizeCodeInput(raw: string): string {
   return raw.toUpperCase().replace(CODE_CHARS, '').slice(0, CODE_LEN);
 }
 
+/**
+ * A deterministic hue from the nickname, so two people in the same room read
+ * as visually distinct player chips instead of identical gray text — Rooms
+ * is the one social, multiplayer surface, and had nothing of its own besides
+ * a plain text input.
+ */
+function avatarHue(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash) % 360;
+}
+
 export default function Rooms({ baseUrl = '' }: { baseUrl?: string }) {
   const [name, setName] = useState('');
   const [codeInput, setCodeInput] = useState('');
@@ -85,15 +99,26 @@ export default function Rooms({ baseUrl = '' }: { baseUrl?: string }) {
       </Sheet>
 
       <Sheet title="Your nickname">
-        <Field label="how others see you">
-          <TextInput
-            value={name}
-            maxLength={24}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="pick a nickname"
-            autoFocus
-          />
-        </Field>
+        <div className="rooms__nickname">
+          {name.trim() ? (
+            <span
+              className="rooms__avatar"
+              style={{ background: `hsl(${avatarHue(name.trim())} 55% 42%)` }}
+              aria-hidden="true"
+            >
+              {name.trim()[0]!.toUpperCase()}
+            </span>
+          ) : null}
+          <Field label="how others see you">
+            <TextInput
+              value={name}
+              maxLength={24}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="pick a nickname"
+              autoFocus
+            />
+          </Field>
+        </div>
       </Sheet>
 
       <Sheet title="Start a room">

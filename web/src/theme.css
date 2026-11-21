@@ -217,6 +217,16 @@ input {
   justify-content: flex-end;
 }
 
+/* Every screen otherwise wears the identical dark-panel register regardless
+   of mode — this is the one deliberate exception. Learn already has warm
+   iconography (the streak flame); a faint gold wash on its own topbar reads
+   as "the gamified one" at a glance, using an existing theme-aware token so
+   it stays coherent across every color theme instead of just the default. */
+.topbar--learn {
+  background: color-mix(in srgb, var(--gold) 7%, var(--bg));
+  border-bottom-color: color-mix(in srgb, var(--gold) 30%, var(--line));
+}
+
 .muted {
   color: var(--ink-soft);
 }
@@ -406,6 +416,15 @@ input {
   font-size: 11px;
   color: var(--ink-soft);
   line-height: 1.45;
+}
+
+.field__hint--error {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.field__hint--success {
+  color: var(--good);
 }
 
 .field__input {
@@ -703,6 +722,30 @@ input {
 
 .mode-card:hover {
   border-color: var(--accent);
+}
+
+/* A first-time visitor has no reason to prefer one of six equal cards over
+   another. Give the one actual on-ramp (Tossups) a visually distinct,
+   full-width primary treatment so there's an obvious first click. */
+.mode-card--primary {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.mode-card--primary:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+}
+
+.mode-card--primary__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.mode-card--primary .mode-card__title {
+  font-size: 17px;
 }
 
 .mode-card:active {
