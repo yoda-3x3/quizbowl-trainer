@@ -13,11 +13,13 @@
  */
 
 import type {
+  MatchSnapshot,
   PlayerView,
   RoomPhase,
   RoomQuestion,
   RoomSnapshot,
   ServerMessage,
+  Side,
 } from './protocol';
 import { ANSWER_WINDOW_MS, PROTOCOL_VERSION } from './protocol';
 import { revealedAt } from '../../src/engine/pacing';
@@ -29,6 +31,27 @@ export interface PlayerRecord {
   name: string;
   score: number;
   connected: boolean;
+  /** Set only in a room attached to a bracket match. */
+  side?: Side;
+}
+
+/**
+ * Present only on a room attached to a bracket match (see brackets.ts and
+ * room.ts's `/__internal/attach-match`). `entrantAKey`/`entrantBKey` are the
+ * bracket match's own entrant keys (e.g. `u:12` or `t:Alpha`) — kept out of
+ * the wire snapshot (MatchSnapshot) since clients only need aggregate scores,
+ * but needed by room.ts to report the winner back to recordBracketMatchResult.
+ */
+export interface RoomMatchState {
+  tournamentId: number;
+  matchId: number;
+  entrantAKey: string;
+  entrantBKey: string;
+  regulationTossups: number;
+  tossupsPlayed: number;
+  sideScores: { a: number; b: number };
+  /** 'bracket' (default) or 'quickplay'. See MatchSnapshot['kind']. */
+  kind: 'bracket' | 'quickplay';
 }
 
 export interface RoomState {
@@ -50,6 +73,8 @@ export interface RoomState {
   /** Players who have already negged this question. */
   lockedOut: string[];
   reveal: RoomSnapshot['reveal'];
+  /** Null for an ordinary ad-hoc room; set for a bracket H2H match room. */
+  match: RoomMatchState | null;
 }
 
 export function createRoom(code: string): RoomState {
@@ -68,6 +93,55 @@ export function createRoom(code: string): RoomState {
     answerDeadline: null,
     lockedOut: [],
     reveal: null,
+    match: null,
+  };
+}
+
+/**
+ * Binds a freshly-created room to a bracket match. Must be called before
+ * anyone joins (room.ts does this from `/__internal/attach-match` right
+ * after allocating the room code). A room can only ever be attached once;
+ * calling this twice is a no-op so a retried request doesn't reset progress.
+ */
+export function attachMatch(
+  s: RoomState,
+  info: {
+    tournamentId: number;
+    matchId: number;
+    entrantAKey: string;
+    entrantBKey: string;
+    regulationTossups: number;
+    kind?: 'bracket' | 'quickplay';
+  },
+): void {
+  if (s.match) return;
+  s.match = {
+    tournamentId: info.tournamentId,
+    matchId: info.matchId,
+    entrantAKey: info.entrantAKey,
+    entrantBKey: info.entrantBKey,
+    regulationTossups: info.regulationTossups,
+    tossupsPlayed: 0,
+    sideScores: { a: 0, b: 0 },
+    kind: info.kind ?? 'bracket',
+  };
+}
+
+/** True once a match room has played its full regulation length. */
+export function isMatchOver(s: RoomState): boolean {
+  return s.match !== null && s.match.tossupsPlayed >= s.match.regulationTossups;
+}
+
+function matchSnapshotOf(s: RoomState): MatchSnapshot | null {
+  if (!s.match) return null;
+  return {
+    tournamentId: s.match.tournamentId,
+    matchId: s.match.matchId,
+    regulationTossups: s.match.regulationTossups,
+    tossupsPlayed: s.match.tossupsPlayed,
+    sideScores: { ...s.match.sideScores },
+    over: isMatchOver(s),
+    kind: s.match.kind,
   };
 }
 
@@ -107,6 +181,7 @@ function playerViews(s: RoomState): PlayerView[] {
       score: p.score,
       connected: p.connected,
       lockedOut: s.lockedOut.includes(p.id),
+      ...(p.side ? { side: p.side } : {}),
     }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }
@@ -125,6 +200,7 @@ export function snapshot(s: RoomState, now: number): RoomSnapshot {
     buzzer: s.buzzer,
     answerDeadline: s.answerDeadline,
     reveal: s.reveal,
+    match: matchSnapshotOf(s),
   };
 }
 
@@ -145,17 +221,20 @@ export function join(
   playerId: string,
   name: string,
   now: number,
+  side?: Side,
 ): Outcome {
   const existing = s.players[playerId];
   if (existing) {
     existing.connected = true;
     existing.name = name || existing.name;
+    if (side) existing.side = side;
   } else {
     s.players[playerId] = {
       id: playerId,
       name: name || 'player',
       score: 0,
       connected: true,
+      ...(side ? { side } : {}),
     };
   }
   return { messages: [{ t: 'state', snapshot: snapshot(s, now) }] };
@@ -368,6 +447,16 @@ function resolve(
     points,
     powered,
   };
+
+  // Tally toward the match's regulation length and side score. A neg that
+  // simply locks a player out without ending the question does NOT reach
+  // here (see applyJudgement) — only an actual resolution (someone correct,
+  // or nobody left who can buzz) counts as "one tossup played".
+  if (s.match) {
+    s.match.tossupsPlayed += 1;
+    const side = winner ? s.players[winner]?.side : undefined;
+    if (side) s.match.sideScores[side] += points;
+  }
 
   const messages: ServerMessage[] = [];
   if (winner) {

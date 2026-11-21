@@ -22,10 +22,12 @@
 import {
   abandonQuestion,
   applyJudgement,
+  attachMatch,
   buzz,
   createRoom,
   everyoneLockedOut,
   finishReading,
+  isMatchOver,
   join,
   leave,
   nextQuestion,
@@ -36,20 +38,24 @@ import {
   type Outcome,
   type RoomState,
 } from './engine';
-import type { ClientMessage, ServerMessage } from './protocol';
+import type { ClientMessage, ServerMessage, Side } from './protocol';
 import { IDLE_TEARDOWN_MS, toRoomQuestion } from './protocol';
 import { judge } from '../../src/engine/judge';
 import { buildSchedule } from '../../src/engine/pacing';
 import { parseQuestion } from '../../src/engine/power';
 import { TossupQueue, defaultFilters } from '../../src/data/qbreader';
+import { d1BracketStore, recordBracketMatchResult } from './brackets';
+import { d1RatingStore } from './ratings';
+import { d1QuickPlayStore, recordQuickPlayMatchResult } from './quickplay';
 
 export interface Env {
   ROOM: DurableObjectNamespace;
   /** D1 database binding for the live-rooms index. Optional so solo-practice
    * tests that stand up the DO without a D1 binding still work. */
   DB?: D1Database;
-  /** Shared secret required by `/__internal/close`. Optional for the same
-   * reason; a missing secret simply refuses every internal request. */
+  /** Shared secret required by `/__internal/close` and `/__internal/attach-match`.
+   * Optional for the same reason; a missing secret simply refuses every
+   * internal request. */
   INTERNAL_SECRET?: string;
 }
 
@@ -139,6 +145,40 @@ export class Room implements DurableObject {
       return Response.json({ ok: true });
     }
 
+    // Internal: brackets.ts's "open a match room" endpoint calls this once,
+    // right after allocating a fresh room code, to bind this DO instance to a
+    // specific bracket match. attachMatch() is itself idempotent, so a retried
+    // request here is harmless.
+    if (url.pathname.endsWith('/__internal/attach-match')) {
+      const presented = request.headers.get('x-internal-secret') ?? '';
+      const expected = this.env.INTERNAL_SECRET ?? '';
+      if (expected.length === 0 || !constantTimeEquals(presented, expected)) {
+        return new Response('forbidden', { status: 403 });
+      }
+      const body = (await request.json()) as {
+        code?: string;
+        tournamentId?: number;
+        matchId?: number;
+        entrantAKey?: string;
+        entrantBKey?: string;
+        regulationTossups?: number;
+        kind?: 'bracket' | 'quickplay';
+      };
+      if (this.room.code === '????' && typeof body.code === 'string') {
+        this.room.code = body.code.toUpperCase();
+      }
+      attachMatch(this.room, {
+        tournamentId: Number(body.tournamentId) || 0,
+        matchId: Number(body.matchId),
+        entrantAKey: String(body.entrantAKey ?? ''),
+        entrantBKey: String(body.entrantBKey ?? ''),
+        regulationTossups: Number(body.regulationTossups) || 20,
+        kind: body.kind,
+      });
+      await this.ctx.storage.put('room', this.room);
+      return Response.json({ ok: true });
+    }
+
     return new Response('not found', { status: 404 });
   }
 
@@ -176,7 +216,8 @@ export class Room implements DurableObject {
     if (msg.t === 'join') {
       const id = msg.playerId?.trim() || crypto.randomUUID();
       this.sessions.set(ws, id);
-      const out = join(this.room, id, String(msg.name ?? '').slice(0, 24), now);
+      const side: Side | undefined = msg.side === 'a' || msg.side === 'b' ? msg.side : undefined;
+      const out = join(this.room, id, String(msg.name ?? '').slice(0, 24), now, side);
       this.sendTo(ws, {
         t: 'welcome',
         playerId: id,
@@ -247,6 +288,9 @@ export class Room implements DurableObject {
   // -------------------------------------------------------------------------
 
   private async beginQuestion(now: number): Promise<Outcome> {
+    if (isMatchOver(this.room)) {
+      return { messages: [{ t: 'error', message: 'this match has finished its regulation tossups' }] };
+    }
     const tossup = await this.queue.next();
     if (!tossup) {
       return { messages: [{ t: 'error', message: 'no questions available' }] };
@@ -328,7 +372,59 @@ export class Room implements DurableObject {
     // A commit may have changed the connected player count; keep the live row
     // honest. Safe to await: `touchLive` degrades to a no-op on D1 errors.
     await this.touchLive(Date.now());
+    await this.reportMatchResultIfOver(Date.now());
     await this.rearm();
+  }
+
+  /**
+   * Once a match room's regulation tossups are all played, report the side
+   * with the higher score to whichever store the match belongs to (bracket
+   * or Quick Play). Both `recordBracketMatchResult` and
+   * `recordQuickPlayMatchResult` already refuse a match that isn't 'ready',
+   * so a retried/duplicate call here (e.g. after a DO hibernation) is
+   * harmless — no separate "already reported" flag needed.
+   *
+   * A bracket tie reports nothing; the TD resolves it by hand via the
+   * bracket panel. A Quick Play tie still reports (as "finished" with no
+   * winner and no rating change) since there's no TD to resolve it —
+   * leaving it 'ready' forever would strand both players' match history.
+   */
+  private async reportMatchResultIfOver(now: number): Promise<void> {
+    if (!this.env.DB) return;
+    const match = this.room.match;
+    if (!match || !isMatchOver(this.room)) return;
+    const { a, b } = match.sideScores;
+
+    if (match.kind === 'quickplay') {
+      const winnerUserId = a === b ? null : userIdOf(a > b ? match.entrantAKey : match.entrantBKey);
+      try {
+        await recordQuickPlayMatchResult(
+          d1QuickPlayStore(this.env.DB),
+          d1RatingStore(this.env.DB),
+          match.matchId,
+          winnerUserId,
+          now,
+        );
+      } catch (err) {
+        console.error('quick play match result report failed', err);
+      }
+      return;
+    }
+
+    if (a === b) return;
+    const winnerKey = a > b ? match.entrantAKey : match.entrantBKey;
+    try {
+      await recordBracketMatchResult(
+        d1BracketStore(this.env.DB),
+        d1RatingStore(this.env.DB),
+        match.tournamentId,
+        match.matchId,
+        winnerKey,
+        now,
+      );
+    } catch (err) {
+      console.error('bracket match result report failed', err);
+    }
   }
 
   /**
@@ -477,6 +573,12 @@ export class Room implements DurableObject {
       await this.deregisterLive();
     });
   }
+}
+
+/** Parses a Quick Play entrant key (`u:<id>`) back into a user id, or null. */
+function userIdOf(key: string): number | null {
+  const m = /^u:(\d+)$/.exec(key);
+  return m && m[1] !== undefined ? Number(m[1]) : null;
 }
 
 /**

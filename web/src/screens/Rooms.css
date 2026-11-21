@@ -136,6 +136,14 @@
   color: var(--ink);
 }
 
+.rooms__code-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
 .rooms__conn {
   font-size: 10px;
   letter-spacing: 1px;

@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoomSnapshot, ServerMessage } from '../../workers/room/protocol';
+import type { RoomSnapshot, ServerMessage, Side } from '../../workers/room/protocol';
 import { revealedAt, revealedCharsAt } from '../engine/pacing';
 import { RoomClient, type ConnectionState } from './client';
 
@@ -37,6 +37,7 @@ export function useRoom(
   code: string | null,
   name: string,
   baseUrl = '',
+  side?: Side,
 ): RoomView {
   const clientRef = useRef<RoomClient | null>(null);
   const [connection, setConnection] = useState<ConnectionState>('closed');
@@ -56,22 +57,28 @@ export function useRoom(
   useEffect(() => {
     if (!code) return;
 
-    const client = new RoomClient(baseUrl, code, name, {
-      connection: setConnection,
-      snapshot: (s) => {
-        setSnapshot(s);
-        if (s.question?.id !== lastQuestionId.current) {
-          lastQuestionId.current = s.question?.id ?? null;
-          highWater.current = 0;
-          highWaterChars.current = 0;
-          setLastJudged(null);
-        }
+    const client = new RoomClient(
+      baseUrl,
+      code,
+      name,
+      {
+        connection: setConnection,
+        snapshot: (s) => {
+          setSnapshot(s);
+          if (s.question?.id !== lastQuestionId.current) {
+            lastQuestionId.current = s.question?.id ?? null;
+            highWater.current = 0;
+            highWaterChars.current = 0;
+            setLastJudged(null);
+          }
+        },
+        message: (m) => {
+          if (m.t === 'judged') setLastJudged(m);
+          if (m.t === 'error') setError(m.message);
+        },
       },
-      message: (m) => {
-        if (m.t === 'judged') setLastJudged(m);
-        if (m.t === 'error') setError(m.message);
-      },
-    });
+      side,
+    );
 
     clientRef.current = client;
     client.connect();
@@ -80,7 +87,7 @@ export function useRoom(
       client.close();
       clientRef.current = null;
     };
-  }, [code, name, baseUrl]);
+  }, [code, name, baseUrl, side]);
 
   // Animation loop: interpolate the word count and the answer countdown.
   useEffect(() => {
