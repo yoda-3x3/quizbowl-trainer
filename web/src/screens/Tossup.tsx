@@ -77,6 +77,7 @@ export interface TossupProps {
 export default function Tossup({ onExit, onProtest, source }: TossupProps) {
   const [settings] = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
+  const readCardRef = useRef<HTMLParagraphElement>(null);
   const queueRef = useRef<TossupQueue | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
   const busyRef = useRef(false);
@@ -304,6 +305,15 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
   const inPower =
     reader.powerIndex !== null && reader.revealed <= reader.powerIndex + 1;
 
+  // `.read--card` has a bounded height now (see theme.css) so a long tossup
+  // scrolls instead of growing the card and pushing Buzz down the page; keep
+  // the newest revealed word in view as it fills.
+  useEffect(() => {
+    const el = readCardRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [shownChars]);
+
   const result = reader.result;
   const accepted = result?.judgement.directive === 'accept';
 
@@ -363,11 +373,11 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
         </div>
 
         {hideQuestion ? (
-          <p className="read read--card muted">
+          <p className="read read--card muted" ref={readCardRef}>
             <em>Question hidden. Press K to show it again.</em>
           </p>
         ) : (
-          <p className="read read--card">
+          <p className="read read--card" ref={readCardRef}>
             {powerRange ? (
               <>
                 <span>{shown.slice(0, Math.min(shownChars, powerRange.start))}</span>
