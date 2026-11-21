@@ -118,8 +118,8 @@ describe('manifest', () => {
   it('is installable: standalone, scoped, and themed to --bg', () => {
     expect(manifest.display).toBe('standalone');
     expect(manifest.start_url).toBe('/');
-    expect(manifest.theme_color).toBe('#0f1216');
-    expect(manifest.background_color).toBe('#0f1216');
+    expect(manifest.theme_color).toBe('#0b0a08');
+    expect(manifest.background_color).toBe('#0b0a08');
   });
 
   it('ships 192, 512 and a maskable icon, and they exist on disk', () => {

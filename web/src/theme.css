@@ -1,18 +1,23 @@
 @import './themes.css';
 
+/* Base palette: black + beige, for a system in dark mode (and the default
+   when the OS doesn't report a preference at all). A `prefers-color-scheme:
+   light` media query below swaps these to white + beige instead — the
+   classic theme deliberately has no palette of its own (see themes.css) so
+   that swap is the only place "dark" vs. "light" classic is decided. */
 :root {
-  --bg: #0f1216;
-  --panel: #171c23;
-  --panel-2: #1e242d;
-  --line: #2a323d;
-  --ink: #e7ecf3;
-  --ink-soft: #8b97a7;
+  --bg: #0b0a08;
+  --panel: #1c1813;
+  --panel-2: #26211a;
+  --line: #3c3426;
+  --ink: #f3ede0;
+  --ink-soft: #b9ab8c;
   --accent: #f2994a;
   --good: #66d17a;
   --bad: #ef5959;
   --gold: #f0c14b;
 
-  --font-ui: 'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-ui: Futura, 'Century Gothic', Questrial, 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-read: 'Lora', Georgia, 'Iowan Old Style', serif;
 
   /* Motion tokens. Every transition / animation in the app uses these so
@@ -27,6 +32,35 @@
   --dur-slow: 400ms;      /* large transitions, section reveals */
 
   color-scheme: dark;
+}
+
+/* System in light mode: white + beige instead of black + beige. Painted
+   themes (art/science/...) are unaffected — each sets every one of these
+   tokens itself, at higher specificity than :root, regardless of the OS
+   preference, since they're a deliberate aesthetic choice rather than a
+   light/dark pair. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #faf6ec;
+    --panel: #f1e9d6;
+    --panel-2: #e7dcc0;
+    --line: #d2c29a;
+    --ink: #221d13;
+    --ink-soft: #6e6248;
+    color-scheme: light;
+    /* The bright orange reads fine as a button background in either mode,
+       but used as plain text (links, focus highlights, several labels) it
+       falls under 3:1 against a light beige page — a deeper rust keeps the
+       same hue family while staying legible as text on a light background. */
+    --accent: #b5560f;
+    /* Semantic tones tuned for dark panels wash out on a light beige
+       background (same issue the math theme already solved) — darken
+       good/bad/gold so accuracy/power/neg pills stay readable. */
+    --good: #2b7a3f;
+    --bad: #a01818;
+    --gold: #8a6a1a;
+    --gold-dim: #a68f4a;
+  }
 }
 
 * {

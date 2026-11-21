@@ -786,20 +786,48 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   padding: 6px 0 2px;
 }
 
+/* A straight spine reads oddly once the nodes themselves zigzag, so it's
+   replaced by a dotted guide that runs the same alternating path (see the
+   repeating linear-gradient below) rather than removed outright. */
 .unit__spine {
   position: absolute;
   top: 24px;
   bottom: 24px;
   left: 50%;
-  width: 2px;
-  background: var(--panel-2);
+  width: 0;
+  border-left: 3px dotted var(--panel-2);
   transform: translateX(-50%);
-  border-radius: 2px;
   pointer-events: none;
+  z-index: 0;
+}
+
+/* Zigzag: the lesson path alternates the node off-center left/right/center
+   instead of a single straight column, à la Duolingo. 5 lessons per unit is
+   the fixed shape (LESSON_LENGTH), so a 5-step offset pattern covers every
+   unit without needing to measure anything. `.unit__spine` is the path's
+   first child, so the lesson nodes are nth-child(2) through nth-child(6). */
+.lesson-node:nth-child(2) {
+  transform: translateX(0);
+}
+
+.lesson-node:nth-child(3) {
+  transform: translateX(46px);
+}
+
+.lesson-node:nth-child(4) {
+  transform: translateX(-46px);
+}
+
+.lesson-node:nth-child(5) {
+  transform: translateX(46px);
+}
+
+.lesson-node:nth-child(6) {
+  transform: translateX(-46px);
 }
 
 .lesson-node {

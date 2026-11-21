@@ -43,17 +43,15 @@
   z-index: -1;
 }
 
-/* Classic — the dark neutral palette, now with the app's new default
-   orange accent and Manrope/Lora font pairing (previously light blue +
-   Segoe UI/Georgia). Still explicit so a theme switch back to classic
-   re-asserts every token, including over a painted theme's backdrop. */
+/* Classic — the neutral black/beige (dark) or white/beige (light) palette,
+   switched by the system's prefers-color-scheme in theme.css's :root, with
+   the app's orange accent and Futura/Lora font pairing. Unlike every
+   painted theme below, classic deliberately carries no fixed palette of its
+   own here — it just re-asserts the font tokens (still needed so switching
+   back from a painted theme doesn't keep that theme's display/text font)
+   and lets --bg/--panel/--ink/etc. fall through to :root's media-query-
+   driven values, which is what makes it respond to light/dark at all. */
 .app[data-theme='classic'] {
-  --bg: #0f1216;
-  --panel: #171c23;
-  --panel-2: #1e242d;
-  --line: #2a323d;
-  --ink: #e7ecf3;
-  --ink-soft: #8b97a7;
   --accent: #f2994a;
   --display-font: var(--font-ui);
   --text-font: var(--font-read);
