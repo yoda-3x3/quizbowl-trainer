@@ -976,7 +976,11 @@
 .lesson-overlay__progress {
   display: flex;
   gap: 6px;
-  padding: 10px 14px 4px;
+  /* Right padding clears the fixed-position pre-alpha badge (see
+     .pre-alpha-badge in theme.css) — this bar sits outside the normal
+     .topbar flow (the overlay is position: fixed, inset: 0), so it needs
+     its own reserved gutter rather than inheriting .topbar's. */
+  padding: 10px 88px 4px 14px;
   align-items: center;
 }
 
