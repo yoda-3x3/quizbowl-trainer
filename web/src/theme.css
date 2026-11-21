@@ -25,6 +25,7 @@
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);   /* most things */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);   /* entrances, big state changes */
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);         /* fades out, dismissals */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1); /* overshoots then settles: button release, celebrations */
 
   --dur-instant: 80ms;    /* micro: focus ring, button press */
   --dur-fast: 160ms;      /* hover, small UI shifts */
@@ -132,6 +133,30 @@ input {
      anchor every child inherits the default dark theme's ink. */
   background: var(--bg);
   color: var(--ink);
+}
+
+/* Wraps whichever tab is active (see App.tsx) so switching tabs replays a
+   short entrance instead of the new screen just popping in. Transparent to
+   layout otherwise — same flex column behavior the topbar/app__body pair
+   had as direct .app children before this wrapper existed, so sticky/fixed
+   positioning inside (topbar, tab bar) is unaffected. */
+.tab-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  animation: qbt-page-in var(--dur-medium) var(--ease-emphasized);
+}
+
+@keyframes qbt-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .app__body {
@@ -352,8 +377,12 @@ input {
   color: var(--ink);
   font-size: 13px;
   letter-spacing: 0.2px;
+  transform: scale(1);
+  /* Pressing down is quick and linear (instant feedback); releasing
+     overshoots past full size and settles — the "pop" that makes a press
+     feel satisfying rather than just a flat state change. */
   transition: opacity var(--dur-fast) var(--ease-standard),
-    transform var(--dur-instant) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce),
     border-color var(--dur-fast) var(--ease-standard),
     background-color var(--dur-fast) var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
@@ -364,7 +393,8 @@ input {
 }
 
 .btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: scale(0.93);
+  transition-duration: var(--dur-instant);
 }
 
 .btn:disabled {
@@ -390,6 +420,8 @@ input {
 }
 
 .btn--buzz {
+  position: relative;
+  overflow: hidden;
   background: var(--bad);
   border-color: var(--bad);
   color: #fff;
@@ -397,6 +429,37 @@ input {
   letter-spacing: 0.8px;
   min-height: 56px;
   font-size: 15px;
+}
+
+/* The core interaction of the whole app earns a bigger press and a ripple
+   pulse, not just the shared button scale-down. */
+.btn--buzz:active:not(:disabled) {
+  transform: scale(0.88);
+}
+
+.btn--buzz:active:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  animation: qbt-buzz-ripple 380ms var(--ease-exit);
+  pointer-events: none;
+}
+
+@keyframes qbt-buzz-ripple {
+  from {
+    opacity: 1;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
 }
 
 .btn--block {
@@ -494,9 +557,16 @@ input {
   border-radius: 999px;
   padding: 7px 11px;
   font-size: 12px;
+  transform: scale(1);
   transition: color var(--dur-fast) var(--ease-standard),
     border-color var(--dur-fast) var(--ease-standard),
-    background-color var(--dur-fast) var(--ease-standard);
+    background-color var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce);
+}
+
+.chip:active {
+  transform: scale(0.92);
+  transition-duration: var(--dur-instant);
 }
 
 .chip[aria-pressed="true"] {
@@ -749,8 +819,9 @@ input {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   color: var(--ink);
+  transform: scale(1);
   transition: border-color var(--dur-fast) var(--ease-standard),
-    transform var(--dur-instant) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-bounce),
     box-shadow var(--dur-fast) var(--ease-standard);
 }
 
@@ -783,7 +854,8 @@ input {
 }
 
 .mode-card:active {
-  transform: translateY(1px);
+  transform: scale(0.97);
+  transition-duration: var(--dur-instant);
 }
 
 .mode-card__title {
@@ -798,6 +870,51 @@ input {
 }
 
 /* --- bonus --------------------------------------------------------------- */
+
+/* A full house (every part correct) earns a one-shot celebration: a bright
+   diagonal sweep across the card plus a quick green glow pulse. Applied by
+   Bonus.tsx the instant the last part resolves and every directive was
+   'accept'; the class never gets removed afterward (nothing reruns these
+   @keyframes), so this only ever plays once per bonus. */
+.bonus-sweep {
+  position: relative;
+  overflow: hidden;
+  animation: qbt-bonus-glow 900ms var(--ease-standard);
+}
+
+.bonus-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    color-mix(in srgb, var(--good) 55%, white 45%) 50%,
+    transparent 70%
+  );
+  opacity: 0.8;
+  transform: translateX(-130%);
+  animation: qbt-bonus-sweep 900ms var(--ease-standard);
+}
+
+@keyframes qbt-bonus-sweep {
+  to {
+    transform: translateX(130%);
+  }
+}
+
+@keyframes qbt-bonus-glow {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
+  }
+  25% {
+    box-shadow: 0 0 28px 3px color-mix(in srgb, var(--good) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 0%, transparent);
+  }
+}
 
 .part {
   border-top: 1px solid var(--line);

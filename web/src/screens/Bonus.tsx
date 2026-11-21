@@ -253,6 +253,10 @@ export default function Bonus({ onExit, source }: BonusProps) {
 
   const earned = results.reduce((a, r) => a + r.points, 0);
   const stats = useMemo(() => summary(events), [events]);
+  const allCorrect =
+    complete &&
+    results.length > 0 &&
+    results.every((r) => r.directive === 'accept');
 
   return (
     <>
@@ -295,7 +299,7 @@ export default function Bonus({ onExit, source }: BonusProps) {
         </div>
 
         {current && plan ? (
-          <Sheet>
+          <Sheet className={allCorrect ? 'bonus-sweep' : undefined}>
             <p className="read">{current.leadinSanitized}</p>
 
             {plan.truncated ? (
