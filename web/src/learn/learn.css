@@ -738,6 +738,18 @@
   gap: 16px;
 }
 
+/* Above phone/tablet width, one unit per full-width row leaves a single
+   ~130px-wide column of lesson nodes stranded in the middle of a huge empty
+   card. Let units sit side by side instead — each keeps its own centered
+   vertical path, just packed more than one to a row. */
+@media (min-width: 700px) {
+  .units {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    align-items: start;
+  }
+}
+
 .unit {
   background: var(--panel);
   border: 1px solid var(--line);

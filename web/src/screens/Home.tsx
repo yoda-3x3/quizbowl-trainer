@@ -180,8 +180,23 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
           </Sheet>
         ) : null}
 
+        <button
+          type="button"
+          className="mode-card mode-card--primary"
+          onClick={() => onStart('tossup')}
+        >
+          <span className="mode-card--primary__eyebrow">
+            new here? start with this
+          </span>
+          <span className="mode-card__title">Tossups</span>
+          <span className="mode-card__body">
+            Pyramidal questions read word by word. Space buzzes, Enter
+            submits, power counts.
+          </span>
+        </button>
+
         <div className="mode-grid">
-          {MODES.map((m) => (
+          {MODES.filter((m) => m.mode !== 'tossup').map((m) => (
             <button
               key={m.mode}
               type="button"
@@ -227,9 +242,10 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
           </PillRow>
           {stats.heard === 0 ? (
             <p className="tiny muted">
-              Play a tossup and these fill in. Every statistic in the app is
-              derived from the attempt log, so nothing is lost by changing
-              settings later.
+              Every rep you play here becomes a real, permanent stat line —
+              not just a score. Buzz on your first tossup above and this
+              panel starts tracking your accuracy, power rate and buzz
+              point, exactly like a tournament stat sheet.
             </p>
           ) : null}
         </Sheet>
