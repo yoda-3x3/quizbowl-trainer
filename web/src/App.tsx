@@ -20,6 +20,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import Home, { type PracticeMode } from './screens/Home';
 import Tossup from './screens/Tossup';
 import Bonus from './screens/Bonus';
+import Starred from './screens/Starred';
 import EarHub from './ear/EarHub';
 import PacketImport from './screens/Import';
 import SettingsScreen from './screens/Settings';
@@ -90,9 +91,10 @@ export default function App() {
   useShortcuts(shortcuts);
 
   if (showAdmin) {
+    // Ignores the chosen theme on purpose: the admin dashboard stays plain
+    // black-on-white whatever theme the admin picked (see admin.css).
     return (
-      <div className="app" data-theme={theme}>
-        <ThemeBackdrop theme={theme} />
+      <div className="app app--admin">
         <Admin onExit={() => setShowAdmin(false)} />
         {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
       </div>
@@ -181,6 +183,7 @@ function ShortcutsHelp({
           <ShortcutRow keys={['1', '2', '3', '4', '5']} label="Switch tabs (Practice, Learn, Rooms, Tourneys, Settings)" />
           <ShortcutRow keys={['T']} label="Tossups" />
           <ShortcutRow keys={['B']} label="Bonuses" />
+          <ShortcutRow keys={['R']} label="Replay starred questions" />
           <ShortcutRow keys={['E']} label="Ear training" />
           <ShortcutRow keys={['V']} label="Vision trainer" />
           <ShortcutRow keys={['O']} label="OAC match" />
@@ -244,6 +247,8 @@ function Practice({
       return <Tossup onExit={onExit} />;
     case 'bonus':
       return <Bonus onExit={onExit} />;
+    case 'starred':
+      return <Starred onExit={onExit} />;
     case 'ear':
       return (
         <Screen title="Ear training" onExit={onExit}>

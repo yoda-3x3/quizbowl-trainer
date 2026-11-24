@@ -73,9 +73,11 @@ export interface TossupProps {
    * Tournament mode: override the question stream. See `TossupSource`.
    */
   source?: TossupSource;
+  /** Topbar title. Defaults to "Tossups". */
+  title?: string;
 }
 
-export default function Tossup({ onExit, onProtest, source }: TossupProps) {
+export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }: TossupProps) {
   const [settings] = useSettings();
   const inputRef = useRef<HTMLInputElement>(null);
   const readCardRef = useRef<HTMLParagraphElement>(null);
@@ -361,7 +363,7 @@ export default function Tossup({ onExit, onProtest, source }: TossupProps) {
   return (
     <>
       <header className="topbar">
-        <h1 className="topbar__title">Tossups</h1>
+        <h1 className="topbar__title">{title}</h1>
         <div className="topbar__right">
           <Button variant="ghost" small onClick={onExit}>
             Done

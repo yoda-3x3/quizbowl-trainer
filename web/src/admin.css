@@ -8,6 +8,40 @@
  * leaks into the consumer-facing screens that still use `.sheet`/`.btn`.
  */
 
+/* Covers the whole admin screen (not just `.admin-plain`'s own padded box)
+   so no sliver of the user's chosen theme — backdrop painting, dark panel,
+   accent color — shows through around the edges. App.tsx skips rendering
+   ThemeBackdrop entirely on this screen; this is the belt to that braces. */
+/* The admin tab components (Users/Rooms/Packets/Protests) lean on the app's
+   own CSS custom properties in inline styles (var(--line), var(--panel-2),
+   etc.) rather than admin.css classes. Redefining those tokens here, scoped
+   to the whole admin screen, neutralizes every one of those lookups back to
+   plain grayscale without having to touch each component — whichever theme
+   the admin has picked never reaches a var() anywhere under this screen. */
+.app.app--admin {
+  --bg: #fff;
+  --panel: #fff;
+  --panel-2: #eee;
+  --surface-2: #eee;
+  --line: #999;
+  --ink: #111;
+  --ink-soft: #555;
+  --text: #111;
+  --accent: #555;
+  --gold: #555;
+  background: #fff;
+}
+
+.app.app--admin .app__body {
+  background: #fff;
+}
+
+.app.app--admin .topbar {
+  background: #fff;
+  color: #111;
+  border-bottom-color: #999;
+}
+
 .admin-plain {
   background: #fff;
   color: #111;
