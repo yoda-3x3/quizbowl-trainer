@@ -45,6 +45,7 @@ import { useMyRating } from '../rank';
 import RankBadge from '../RankBadge';
 import SignIn from './SignIn';
 import SignUp from './SignUp';
+import VoiceToggles from '../voice/VoiceToggles';
 
 type AuthView = 'none' | 'signin' | 'signup';
 
@@ -194,6 +195,10 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
             hint="Real quizbowl gives about five seconds."
             onChange={(postBuzzSeconds) => set({ postBuzzSeconds })}
           />
+        </Sheet>
+
+        <Sheet title="Voice">
+          <VoiceToggles explain />
         </Sheet>
 
         <Sheet title="Difficulty">

@@ -6,7 +6,14 @@
  * which makes it useful for learning a canon rather than drilling reflexes.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { speak, stopSpeaking } from '../voice/speech';
+import {
+  VoiceAnswerStatus,
+  useReadAloud,
+  useVoiceAnswer,
+  useVoiceSettings,
+} from '../voice/useVoice';
 import RevealCanvas from './RevealCanvas';
 import { studyOrder } from './match';
 import { ARTWORKS } from './works';
@@ -61,11 +68,12 @@ export default function StudyMode() {
     [artwork.title],
   );
 
-  const submit = useCallback((giveUp = false) => {
+  const submit = useCallback((giveUp = false, spoken?: string) => {
     if (phase === 'answered') return;
+    const answer = spoken ?? given;
     const verdict = giveUp
       ? { directive: 'reject' as const }
-      : judge(answerLine, given);
+      : judge(answerLine, answer);
     const ok = verdict.directive === 'accept';
     setCorrect(ok);
     setPhase('answered');
@@ -82,7 +90,7 @@ export default function StudyMode() {
       buzzWordIndex: shown - 1,
       totalWords: order.length,
       powerWordIndex: null,
-      givenAnswer: giveUp ? '' : given,
+      givenAnswer: giveUp ? '' : answer,
       directive: verdict.directive,
       points: ok ? 10 : 0,
       msToAnswer: null,
@@ -108,6 +116,29 @@ export default function StudyMode() {
     setPhase('revealing');
     setCorrect(null);
   }, [cursor, deck.length]);
+
+  // Voice: read each new detail out, listen for the title in between, and
+  // announce the work once answered.
+  const voice = useVoiceSettings();
+  const clue = phase === 'revealing' ? reveals[reveals.length - 1]?.element.label : undefined;
+  const clueRead = useReadAloud(voice.read, clue ? `${artwork.id}#${shown}` : null, clue ?? '');
+  useEffect(() => {
+    if (!voice.read || phase !== 'answered') return;
+    speak(`${correct ? 'Correct.' : 'Not this one.'} ${artwork.title}, by ${artwork.artist}.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, phase, artwork.id]);
+  useEffect(() => stopSpeaking, []);
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && phase === 'revealing' && clueRead,
+    (text) => {
+      setGiven(text);
+      if (text.trim()) submit(false, text);
+    },
+    artwork.id,
+  );
+  useEffect(() => {
+    if (voiceAnswer.state === 'listening' && voiceAnswer.heard) setGiven(voiceAnswer.heard);
+  }, [voiceAnswer.state, voiceAnswer.heard]);
 
   return (
     <div className="stack">
@@ -160,6 +191,7 @@ export default function StudyMode() {
               I don't know
             </Button>
           </div>
+          <VoiceAnswerStatus voice={voiceAnswer} />
 
           <p className="study__left">
             Fewer details used is a better result. Giving-away details are kept

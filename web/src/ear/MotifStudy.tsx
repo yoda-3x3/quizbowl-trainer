@@ -10,7 +10,14 @@
  * which is the skill a tossup actually tests.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { speak, stopSpeaking } from '../voice/speech';
+import {
+  VoiceAnswerStatus,
+  useReadAloud,
+  useVoiceAnswer,
+  useVoiceSettings,
+} from '../voice/useVoice';
 import MotifReveal from './MotifReveal';
 import { motifStudyOrder, type MotifReveal as Rev } from './motifMatch';
 import { MOTIF_WORKS, type MotifWork } from './motifs';
@@ -65,11 +72,12 @@ export default function MotifStudy() {
 
   const atEnd = shown >= order.length;
 
-  const submit = useCallback((giveUp = false) => {
+  const submit = useCallback((giveUp = false, spoken?: string) => {
     if (answered) return;
+    const answer = spoken ?? given;
     const verdict = giveUp
       ? { directive: 'reject' as const }
-      : judge(answerlineFor(work), given);
+      : judge(answerlineFor(work), answer);
     const ok = verdict.directive === 'accept';
     setCorrect(ok);
     setAnswered(true);
@@ -86,7 +94,7 @@ export default function MotifStudy() {
       buzzWordIndex: shown - 1,
       totalWords: order.length,
       powerWordIndex: null,
-      givenAnswer: giveUp ? '' : given,
+      givenAnswer: giveUp ? '' : answer,
       directive: verdict.directive,
       points: ok ? 10 : 0,
       msToAnswer: null,
@@ -111,6 +119,29 @@ export default function MotifStudy() {
     setAnswered(false);
     setCorrect(false);
   }, [cursor, deck.length]);
+
+  // Voice: read each new motif's description, listen in between, announce
+  // the piece once answered.
+  const voice = useVoiceSettings();
+  const clue = answered ? undefined : reveals[reveals.length - 1]?.motif.label;
+  const clueRead = useReadAloud(voice.read, clue ? `${work.id}#${shown}` : null, clue ?? '');
+  useEffect(() => {
+    if (!voice.read || !answered) return;
+    speak(`${correct ? 'Correct.' : 'Not this one.'} ${work.title}, by ${work.composer}.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, answered, work.id]);
+  useEffect(() => stopSpeaking, []);
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && !answered && clueRead,
+    (text) => {
+      setGiven(text);
+      if (text.trim()) submit(false, text);
+    },
+    work.id,
+  );
+  useEffect(() => {
+    if (voiceAnswer.state === 'listening' && voiceAnswer.heard) setGiven(voiceAnswer.heard);
+  }, [voiceAnswer.state, voiceAnswer.heard]);
 
   return (
     <div className="stack">
@@ -181,6 +212,7 @@ export default function MotifStudy() {
               I don't know
             </Button>
           </div>
+          <VoiceAnswerStatus voice={voiceAnswer} />
 
           <p className="study__left">
             Play button sounds only the stretches you have revealed. Fewer

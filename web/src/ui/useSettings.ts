@@ -78,6 +78,10 @@ export interface Settings {
   strictness: number;
   /** Visual skin. `classic` is the default and the fallback for unknown values. */
   theme: ThemeId;
+  /** Voice mode: read questions aloud. */
+  voiceRead: boolean;
+  /** Voice mode: listen for a spoken answer after a buzz. */
+  voiceAnswer: boolean;
 }
 
 export const WPM_RANGE = { min: 60, max: 300 } as const;
@@ -92,6 +96,8 @@ export const DEFAULT_SETTINGS: Settings = {
   subcategories: [],
   strictness: DEFAULT_STRICTNESS,
   theme: 'classic',
+  voiceRead: false,
+  voiceAnswer: false,
 };
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -157,6 +163,8 @@ export function normalizeSettings(raw: unknown): Settings {
     subcategories,
     strictness: clamp(Number(r.strictness ?? DEFAULT_SETTINGS.strictness), 1, 12),
     theme: isTheme(r.theme) ? r.theme : DEFAULT_SETTINGS.theme,
+    voiceRead: r.voiceRead === true,
+    voiceAnswer: r.voiceAnswer === true,
   };
 }
 

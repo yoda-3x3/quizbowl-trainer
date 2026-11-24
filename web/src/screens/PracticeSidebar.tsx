@@ -25,6 +25,7 @@ import {
   subcategoriesFor,
   useSettings,
 } from '../ui';
+import VoiceToggles from '../voice/VoiceToggles';
 
 export default function PracticeSidebar() {
   const [settings, set] = useSettings();
@@ -72,6 +73,11 @@ export default function PracticeSidebar() {
             format={(n) => `${n}s`}
             onChange={(postBuzzSeconds) => set({ postBuzzSeconds })}
           />
+        </section>
+
+        <section className="practice-sidebar__section">
+          <h2 className="practice-sidebar__title">Voice</h2>
+          <VoiceToggles />
         </section>
 
         <section className="practice-sidebar__section">

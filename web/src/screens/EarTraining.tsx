@@ -36,6 +36,8 @@ import {
   type EarWork,
 } from '../ear/works';
 import type { AttemptEvent, Directive } from '../types';
+import { speak, stopSpeaking } from '../voice/speech';
+import { VoiceAnswerStatus, useVoiceAnswer, useVoiceSettings } from '../voice/useVoice';
 
 /**
  * Standard repertoire: this is the Regular High School band of the QB Reader
@@ -152,11 +154,12 @@ export default function EarTraining() {
     });
   }, [items, queue.length]);
 
-  const submit = useCallback((giveUp = false) => {
+  const submit = useCallback((giveUp = false, spoken?: string) => {
     if (!item || verdict) return;
+    const said = spoken ?? answer;
     const directive: Directive = giveUp
       ? 'reject'
-      : judgeWork(item.work, answer);
+      : judgeWork(item.work, said);
     const correct = directive === 'accept';
     const notesVerdict = giveUp
       ? null
@@ -182,7 +185,7 @@ export default function EarTraining() {
       buzzWordIndex: null,
       totalWords: 0,
       powerWordIndex: null,
-      givenAnswer: answer.trim(),
+      givenAnswer: said.trim(),
       directive,
       points: correct ? EAR_POINTS : 0,
       msToAnswer: Date.now() - shownAt.current,
@@ -194,6 +197,29 @@ export default function EarTraining() {
     };
     void append(event);
   }, [answer, anyKey, item, notes, verdict]);
+
+  // Voice: listen for the piece or composer, but only while the clip isn't
+  // playing — the mic would otherwise hear the music. Announce the answer.
+  const voice = useVoiceSettings();
+  const [clipPlaying, setClipPlaying] = useState(false);
+  useEffect(() => setClipPlaying(false), [index]);
+  useEffect(() => {
+    if (!voice.read || !verdict || !item) return;
+    speak(`${verdict.correct ? 'Correct.' : 'Not this time.'} ${item.work.piece}, by ${item.work.composer}.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, verdict !== null, index]);
+  useEffect(() => stopSpeaking, []);
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && item !== undefined && verdict === null && !clipPlaying,
+    (text) => {
+      setAnswer(text);
+      if (text.trim()) submit(false, text);
+    },
+    index,
+  );
+  useEffect(() => {
+    if (voiceAnswer.state === 'listening' && voiceAnswer.heard) setAnswer(voiceAnswer.heard);
+  }, [voiceAnswer.state, voiceAnswer.heard]);
 
   if (!item) return <p className="placeholder">No clips available.</p>;
 
@@ -224,6 +250,9 @@ export default function EarTraining() {
             controls
             preload="auto"
             src={url}
+            onPlay={() => setClipPlaying(true)}
+            onPause={() => setClipPlaying(false)}
+            onEnded={() => setClipPlaying(false)}
           />
         ) : (
           <div className="stack">
@@ -294,6 +323,7 @@ export default function EarTraining() {
               spellCheck={false}
               placeholder="either one counts"
               onChange={(e) => setAnswer(e.target.value)}
+              aria-describedby="ear-voice-status"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && e.shiftKey) {
                   e.preventDefault();
@@ -307,6 +337,13 @@ export default function EarTraining() {
               }}
             />
           </label>
+          <div id="ear-voice-status">
+            {voice.answer && clipPlaying ? (
+              <p className="tiny muted">pause the clip to answer by voice</p>
+            ) : (
+              <VoiceAnswerStatus voice={voiceAnswer} />
+            )}
+          </div>
 
           <label className="field">
             <span className="field__label">
