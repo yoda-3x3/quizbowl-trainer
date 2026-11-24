@@ -22,6 +22,7 @@ import {
   RANK_TIERS,
   SUBRANK_WIDTH,
   TIER_WIDTH,
+  handleAdminSetElo,
   handleRatings,
   recordMatchResult,
   tierForElo,
@@ -320,5 +321,108 @@ describe('handleRatings', () => {
     const { authStore, ratingStore } = await seed();
     const res = await handleRatings(req('GET', '/api/tournaments'), authStore, ratingStore, ctx());
     expect(res).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Admin: direct ELO override
+// ---------------------------------------------------------------------------
+
+describe('handleAdminSetElo', () => {
+  it('requires sign-in', async () => {
+    const { authStore, ratingStore, bobId } = await seed();
+    const res = await handleAdminSetElo(
+      req('POST', `/api/admin/users/${bobId}/elo`, { elo: 900 }),
+      authStore,
+      ratingStore,
+      ctx(),
+      bobId,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it('refuses a non-admin caller', async () => {
+    // alice is the first signup, so she is the admin; bob is a plain user.
+    const { authStore, ratingStore, aliceId, bobCookie } = await seed();
+    const res = await handleAdminSetElo(
+      req('POST', `/api/admin/users/${aliceId}/elo`, { elo: 900 }, bobCookie),
+      authStore,
+      ratingStore,
+      ctx(),
+      aliceId,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('404s for a user id that does not exist', async () => {
+    const { authStore, ratingStore, aliceCookie } = await seed();
+    const res = await handleAdminSetElo(
+      req('POST', '/api/admin/users/999999/elo', { elo: 900 }, aliceCookie),
+      authStore,
+      ratingStore,
+      ctx(),
+      999999,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('rejects a missing or non-numeric elo', async () => {
+    const { authStore, ratingStore, aliceCookie, bobId } = await seed();
+    const missing = await handleAdminSetElo(
+      req('POST', `/api/admin/users/${bobId}/elo`, {}, aliceCookie),
+      authStore,
+      ratingStore,
+      ctx(),
+      bobId,
+    );
+    expect(missing.status).toBe(400);
+
+    const notANumber = await handleAdminSetElo(
+      req('POST', `/api/admin/users/${bobId}/elo`, { elo: 'a lot' }, aliceCookie),
+      authStore,
+      ratingStore,
+      ctx(),
+      bobId,
+    );
+    expect(notANumber.status).toBe(400);
+  });
+
+  it('lets an admin set another user to an unrated account at ELO_START and recomputes rank', async () => {
+    const { authStore, ratingStore, aliceId, aliceCookie, bobId } = await seed();
+    // Give alice a rating above what bob is about to be set to, so bob
+    // landing at 950 doesn't make him the leaderboard's #1 (God overrides
+    // tier) — this test is about the tier math, not the God special case.
+    await ratingStore.upsertRating({ userId: aliceId, elo: 2000, wins: 0, losses: 0, updatedAt: NOW });
+    const res = await handleAdminSetElo(
+      req('POST', `/api/admin/users/${bobId}/elo`, { elo: 950 }, aliceCookie),
+      authStore,
+      ratingStore,
+      ctx(),
+      bobId,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      rating: { elo: number; wins: number; losses: number; rank: { tier: string; label: string } };
+    };
+    expect(body.rating.elo).toBe(950);
+    expect(body.rating.rank.tier).toBe(tierForElo(950).tier);
+    // Wins/losses are untouched by a direct correction, unlike a real match.
+    expect(body.rating.wins).toBe(0);
+    expect(body.rating.losses).toBe(0);
+    expect(ratingStore.rows.get(bobId)?.elo).toBe(950);
+  });
+
+  it('clamps below ELO_FLOOR rather than storing a negative or sub-floor ELO', async () => {
+    const { authStore, ratingStore, aliceCookie, bobId } = await seed();
+    const res = await handleAdminSetElo(
+      req('POST', `/api/admin/users/${bobId}/elo`, { elo: -500 }, aliceCookie),
+      authStore,
+      ratingStore,
+      ctx(),
+      bobId,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { rating: { elo: number } };
+    expect(body.rating.elo).toBe(ELO_FLOOR);
   });
 });

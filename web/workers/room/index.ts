@@ -23,6 +23,7 @@
  *   POST /api/admin/users/:id/role       -> change a user's role (admin-only)
  *   POST /api/admin/users/:id/ban        -> ban + invalidate sessions (admin-only)
  *   POST /api/admin/users/:id/unban      -> clear banned_at (admin-only)
+ *   POST /api/admin/users/:id/elo        -> set a user's ELO + rank directly (admin-only)
  *   GET  /api/admin/rooms                -> live-room listing from live_rooms
  *   POST /api/admin/rooms/:code/close    -> mark closed_at + drain the DO
  *   GET  /api/admin/packets              -> stub, packets are client-only
@@ -54,7 +55,7 @@ import { d1Store, handleAuth, type RequestContext } from './auth';
 import { d1TournamentStore, handleTournaments } from './tournaments';
 import { d1AdminStore, handleAdmin, type RoomCloser } from './admin';
 import { d1PacketStore, handlePackets } from './packets';
-import { d1RatingStore, handleRatings } from './ratings';
+import { d1RatingStore, handleAdminSetElo, handleRatings } from './ratings';
 import { d1BracketStore, handleBrackets, type MatchRoomOpener } from './brackets';
 import { d1QuickPlayStore, handleQuickPlay, type QuickPlayRoomOpener } from './quickplay';
 
@@ -166,6 +167,24 @@ export default {
     // tournaments dispatch so /api/admin/protests never falls through.
     if (url.pathname.startsWith('/api/admin')) {
       const authStore = d1Store(env.DB);
+
+      // Set a user's ELO directly, ahead of the generic handleAdmin dispatch
+      // (which always returns a Response for any /api/admin/* path, so this
+      // has to be caught first). Lives in ratings.ts, not admin.ts, since
+      // that module already owns the ratings table end to end.
+      const eloAction = /^\/api\/admin\/users\/(\d+)\/elo$/.exec(url.pathname);
+      if (eloAction) {
+        if (request.method !== 'POST') {
+          return new Response(JSON.stringify({ error: 'method not allowed' }), {
+            status: 405,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        const userId = Number(eloAction[1]);
+        const ratingStore = d1RatingStore(env.DB);
+        return handleAdminSetElo(request, authStore, ratingStore, contextFrom(request), userId);
+      }
+
       const tStore = d1TournamentStore(env.DB);
       const adminStore = d1AdminStore(env.DB);
       const packetStore = d1PacketStore(env.DB);

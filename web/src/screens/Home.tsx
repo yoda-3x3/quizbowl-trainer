@@ -20,12 +20,20 @@ import { DIFFICULTY_LABELS, type AttemptEvent } from '../types';
 import { useInstallState } from '../install';
 import InstallButton from '../InstallButton';
 import { useShortcuts } from '../shortcuts';
+import { starredCount } from '../data/starred';
 
 /**
  * Every practice destination. The bottom bar stays at four tabs, so the extra
  * modes live here: at 390px a five or six item bar stops being thumb-sized.
  */
-export type PracticeMode = 'tossup' | 'bonus' | 'ear' | 'vision' | 'import' | 'oac';
+export type PracticeMode =
+  | 'tossup'
+  | 'bonus'
+  | 'starred'
+  | 'ear'
+  | 'vision'
+  | 'import'
+  | 'oac';
 
 interface ModeCard {
   mode: PracticeMode;
@@ -43,6 +51,11 @@ const MODES: readonly ModeCard[] = [
     mode: 'bonus',
     title: 'Bonuses',
     body: 'Three parts, ten points each, no clock. Good for converting what you already half know.',
+  },
+  {
+    mode: 'starred',
+    title: 'Starred',
+    body: 'Replay the tossups you starred with S. Kept on this device until you unstar them.',
   },
   {
     mode: 'ear',
@@ -106,6 +119,7 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
       () => ({
         t: () => onStart('tossup'),
         b: () => onStart('bonus'),
+        r: () => onStart('starred'),
         e: () => onStart('ear'),
         v: () => onStart('vision'),
         o: () => onStart('oac'),
@@ -115,8 +129,11 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
     ),
   );
 
+  const [starred, setStarred] = useState<number | null>(null);
+
   useEffect(() => {
     void all().then(setEvents);
+    void starredCount().then(setStarred);
   }, []);
 
   const stats = useMemo(() => summary(events), [events]);
@@ -203,7 +220,12 @@ export default function Home({ onStart, onOpenSettings }: HomeProps) {
               className="mode-card"
               onClick={() => onStart(m.mode)}
             >
-              <span className="mode-card__title">{m.title}</span>
+              <span className="mode-card__title">
+                {m.title}
+                {m.mode === 'starred' && starred !== null ? (
+                  <span className="muted"> · {starred}</span>
+                ) : null}
+              </span>
               <span className="mode-card__body">{m.body}</span>
             </button>
           ))}

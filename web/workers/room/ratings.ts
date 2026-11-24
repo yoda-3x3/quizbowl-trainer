@@ -303,6 +303,55 @@ async function handleGetOne(
   return json({ rating: await toPublic(authStore, row, isTop) });
 }
 
+interface AdminSetEloBody {
+  elo?: unknown;
+}
+
+/**
+ * Admin-only: directly set a user's ELO (and therefore their feudal rank —
+ * rank is a pure function of ELO, see `tierForElo`). Wins/losses are left
+ * untouched; this is a correction tool for "this player's rank is wrong",
+ * not a way to fabricate a match record. Dispatched from index.ts rather
+ * than folded into handleAdmin/AdminStore so this module stays the single
+ * owner of the ratings table, matching how handleMe/handleGetOne already
+ * work here.
+ */
+export async function handleAdminSetElo(
+  request: Request,
+  authStore: AuthStore,
+  store: RatingStore,
+  ctx: RequestContext,
+  userId: number,
+): Promise<Response> {
+  const me = await requireUser(request, authStore, ctx.now);
+  if (!me) return json({ error: 'not signed in' }, 401);
+  if (me.role !== 'admin') return json({ error: 'admin only' }, 403);
+
+  const target = await authStore.findUserById(userId);
+  if (!target) return json({ error: 'user not found' }, 404);
+
+  let body: AdminSetEloBody | null;
+  try {
+    body = (await request.json()) as AdminSetEloBody;
+  } catch {
+    body = null;
+  }
+  if (!body || typeof body.elo !== 'number' || !Number.isFinite(body.elo)) {
+    return json({ error: 'elo must be a number' }, 400);
+  }
+
+  const before = await ratingOrDefault(store, userId, ctx.now);
+  const row: RatingRow = {
+    ...before,
+    userId,
+    elo: Math.max(ELO_FLOOR, Math.round(body.elo)),
+    updatedAt: ctx.now,
+  };
+  await store.upsertRating(row);
+  const isTop = await isTopRankHolder(store, userId);
+  return json({ rating: await toPublic(authStore, row, isTop) });
+}
+
 export const LEADERBOARD_LIMIT_DEFAULT = 50;
 export const LEADERBOARD_LIMIT_MAX = 200;
 

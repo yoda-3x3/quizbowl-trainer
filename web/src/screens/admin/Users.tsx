@@ -7,7 +7,7 @@
  * the authoritative state.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Field, Sheet, TextInput } from '../../ui';
 import {
   banUser,
@@ -16,6 +16,7 @@ import {
   useAdminUsers,
   type AdminUser,
 } from '../../admin';
+import { fetchRating, setUserElo, type RatingPublic } from '../../rank';
 import { useAuth } from '../../auth';
 
 export default function AdminUsers() {
@@ -175,6 +176,7 @@ function UserRow({
           <option value="admin">admin</option>
         </select>
       </label>
+      <RankEditor userId={user.id} disabled={busy} />
       {user.banned_at != null ? (
         <Button small variant="ghost" disabled={busy} onClick={onUnban}>
           Unban
@@ -190,5 +192,112 @@ function UserRow({
         </Button>
       )}
     </div>
+  );
+}
+
+/**
+ * Shows the user's current rank (e.g. "Knight 3 · 950 ELO") and lets an admin
+ * overwrite the ELO directly — a correction tool for a wrong-looking rank,
+ * not a way to fabricate match history, so it only ever touches `elo`.
+ * Fetches lazily per row rather than batching: the Users list is already
+ * paginated to a handful of rows, and this keeps the server-side shape
+ * (`AdminUser` has no rating fields) untouched.
+ */
+function RankEditor({ userId, disabled }: { userId: number; disabled: boolean }) {
+  const [rating, setRating] = useState<RatingPublic | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchRating(userId)
+      .then((r) => {
+        if (!cancelled) setRating(r);
+      })
+      .catch(() => {
+        if (!cancelled) setRating(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  if (loading) return <span className="tiny muted">rank: …</span>;
+
+  if (editing) {
+    return (
+      <form
+        className="tiny muted"
+        style={{ display: 'flex', gap: 4, alignItems: 'center' }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const elo = Number(draft);
+          if (!Number.isFinite(elo)) {
+            setError('elo must be a number');
+            return;
+          }
+          setSaving(true);
+          setError(null);
+          try {
+            setRating(await setUserElo(userId, elo));
+            setEditing(false);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'failed to save');
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        elo
+        <input
+          className="field__input"
+          type="number"
+          value={draft}
+          disabled={saving}
+          onChange={(e) => setDraft(e.target.value)}
+          style={{ padding: '2px 4px', width: 70 }}
+        />
+        <Button small type="submit" disabled={saving}>
+          Save
+        </Button>
+        <Button
+          small
+          variant="ghost"
+          type="button"
+          disabled={saving}
+          onClick={() => {
+            setEditing(false);
+            setError(null);
+          }}
+        >
+          Cancel
+        </Button>
+        {error ? <span style={{ color: '#8a1f11' }}>{error}</span> : null}
+      </form>
+    );
+  }
+
+  return (
+    <span className="tiny muted" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      rank {rating ? `${rating.rank.label} · ${rating.elo} ELO` : 'unrated'}
+      <Button
+        small
+        variant="ghost"
+        disabled={disabled}
+        onClick={() => {
+          setDraft(String(rating?.elo ?? 400));
+          setEditing(true);
+        }}
+      >
+        Edit
+      </Button>
+    </span>
   );
 }

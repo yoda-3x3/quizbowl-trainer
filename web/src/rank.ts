@@ -47,6 +47,20 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** Admin-only: set a user's ELO directly, which recomputes their rank too
+ * (rank is a pure function of ELO server-side). Wins/losses are untouched. */
+export async function setUserElo(userId: number, elo: number): Promise<RatingPublic> {
+  const res = await fetch(`/api/admin/users/${userId}/elo`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ elo }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  const body = (await res.json()) as { rating: RatingPublic };
+  return body.rating;
+}
+
 export async function fetchMyRating(): Promise<RatingPublic> {
   const body = await getJson<{ rating: RatingPublic }>('/api/ratings/me');
   return body.rating;
