@@ -56,6 +56,12 @@ export interface ReaderHandle {
   /** The judgement that resolved the question, for result display. */
   result: { judgement: Judgement; points: number; powered: boolean } | null;
   start(): void;
+  /**
+   * Re-anchors the reading clock so word `wordIndex` is due now. Voice mode
+   * calls this from speech boundary events so the clock (and therefore the
+   * buzz point that scoring uses) follows the audio rather than the timer.
+   */
+  sync(wordIndex: number): void;
   buzz(): void;
   submit(given: string): void;
   reset(t: Tossup): void;
@@ -102,6 +108,10 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
     buzzWordIndex: null as number | null,
     deadline: 0,
     resolved: false,
+    // High-water marks: a sync() that pulls the clock back must not un-type
+    // text the player has already seen.
+    shownWords: 0,
+    shownChars: 0,
   });
 
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -131,6 +141,8 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
         buzzWordIndex: null,
         deadline: 0,
         resolved: false,
+        shownWords: 0,
+        shownChars: 0,
       };
       setTossup(next);
       setPhase('idle');
@@ -146,6 +158,8 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
   const start = useCallback(() => {
     if (t.current.words.length === 0) return;
     t.current.startedAt = performance.now();
+    t.current.shownWords = 0;
+    t.current.shownChars = 0;
     setPhase('reading');
     setRevealed(0);
     setRevealedChars(0);
@@ -153,8 +167,10 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
     timer.current = setInterval(() => {
       const s = t.current;
       const elapsed = performance.now() - s.startedAt;
-      const n = revealedAt(s.schedule, elapsed);
-      const chars = revealedCharsAt(s.words, s.schedule, elapsed);
+      const n = Math.max(s.shownWords, revealedAt(s.schedule, elapsed));
+      const chars = Math.max(s.shownChars, revealedCharsAt(s.words, s.schedule, elapsed));
+      s.shownWords = n;
+      s.shownChars = chars;
       setRevealed(n);
       setRevealedChars(chars);
       // The question stays "reading" until every letter of the final word has
@@ -166,6 +182,17 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
       }
     }, TICK_MS);
   }, [clearTimer]);
+
+  const sync = useCallback((wordIndex: number) => {
+    const s = t.current;
+    // Only while the reading clock is running: never after a buzz or once
+    // the question has been fully read.
+    if (s.resolved || s.buzzedAt > 0 || timer.current === null || s.startedAt === 0) return;
+    const i = Math.min(Math.max(0, wordIndex), s.schedule.length - 1);
+    const due = s.schedule[i];
+    if (due === undefined) return;
+    s.startedAt = performance.now() - due;
+  }, []);
 
   const buzz = useCallback(() => {
     const s = t.current;
@@ -292,10 +319,11 @@ export function useReader(opts: ReaderOptions): ReaderHandle {
       pendingPrompt,
       result,
       start,
+      sync,
       buzz,
       submit,
       reset,
     }),
-    [tossup, revealed, revealedChars, phase, secondsLeft, pendingPrompt, result, start, buzz, submit, reset],
+    [tossup, revealed, revealedChars, phase, secondsLeft, pendingPrompt, result, start, sync, buzz, submit, reset],
   );
 }

@@ -35,6 +35,19 @@ import {
   useSettings,
 } from '../ui';
 import type { AttemptEvent, Tossup as TossupQuestion } from '../types';
+import {
+  rateForWpm,
+  speak,
+  spokenAnswer,
+  stopSpeaking,
+  wordIndexAtChar,
+} from '../voice/speech';
+import {
+  VoiceAnswerStatus,
+  useReadAloud,
+  useVoiceAnswer,
+  useVoiceSettings,
+} from '../voice/useVoice';
 
 export interface TossupProtestPayload {
   questionId: string;
@@ -326,6 +339,76 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
     if (!canAnswer) return;
     submit('');
   }, [canAnswer, submit]);
+
+  // --- Voice mode ---------------------------------------------------------
+  const voice = useVoiceSettings();
+  const { sync } = reader;
+  // True while anything is being read aloud, so the mic never opens over it.
+  const [talking, setTalking] = useState(false);
+
+  // Read the question from when reading starts until the buzz. 'done' stays
+  // in so the audio isn't cut off if the text finishes first.
+  const readAloud =
+    voice.read &&
+    current !== null &&
+    (reader.phase === 'reading' || reader.phase === 'done');
+  useEffect(() => {
+    if (!readAloud) return;
+    const words = reader.words;
+    setTalking(true);
+    const stop = speak(words.join(' '), {
+      rate: rateForWpm(settings.wpm),
+      onBoundary: (c) => sync(wordIndexAtChar(words, c)),
+      onEnd: (completed) => {
+        // Speech finished first: bring the text to the end with it. Not if it
+        // never played (no voices, blocked) — then the timer keeps pace alone.
+        if (completed) sync(words.length - 1);
+        setTalking(false);
+      },
+    });
+    return () => {
+      stop();
+      setTalking(false);
+    };
+    // Restart only per question, not on every wpm or phase tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readAloud, current?.id]);
+
+  // Read a moderator prompt out, and the result once it resolves.
+  const promptRead = useReadAloud(
+    voice.read,
+    reader.pendingPrompt && current ? `${current.id}#${reader.pendingPrompt}` : null,
+    `Prompt. ${reader.pendingPrompt ?? ''}`,
+  );
+
+  useEffect(() => {
+    const r = reader.result;
+    if (!voice.read || reader.phase !== 'resolved' || !r || !current) return;
+    const verdict =
+      r.judgement.directive === 'accept'
+        ? `Correct. ${r.points} points.`
+        : r.points < 0
+          ? `Incorrect, minus ${-r.points}.`
+          : 'Incorrect.';
+    speak(`${verdict} The answer was ${spokenAnswer(current.answerSanitized)}.`);
+    // Once per resolution.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, reader.phase === 'resolved', current?.id]);
+
+  useEffect(() => stopSpeaking, []);
+
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && canAnswer && !talking && promptRead,
+    (text) => {
+      setGiven(text);
+      if (text.trim()) submit(text);
+    },
+    reader.pendingPrompt,
+  );
+  // Show what's being heard in the answer box as it comes in.
+  useEffect(() => {
+    if (voiceAnswer.state === 'listening' && voiceAnswer.heard) setGiven(voiceAnswer.heard);
+  }, [voiceAnswer.state, voiceAnswer.heard]);
 
   const stats = useMemo(() => summary(events), [events]);
 
@@ -671,6 +754,7 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
                   I don't know
                 </Button>
               </form>
+              <VoiceAnswerStatus voice={voiceAnswer} />
             </>
           )}
         </div>

@@ -35,6 +35,13 @@ import {
   useSettings,
 } from '../ui';
 import type { AttemptEvent, Bonus as BonusQuestion, Directive } from '../types';
+import { rateForWpm, spokenAnswer, stopSpeaking } from '../voice/speech';
+import {
+  VoiceAnswerStatus,
+  useReadAloud,
+  useVoiceAnswer,
+  useVoiceSettings,
+} from '../voice/useVoice';
 
 export const DEFAULT_PART_VALUE = 10;
 
@@ -97,6 +104,10 @@ export interface BonusSource {
 export interface BonusProps {
   onExit(): void;
   source?: BonusSource;
+}
+
+function earnedSoFar(results: PartResult[]): number {
+  return results.reduce((a, r) => a + r.points, 0);
 }
 
 export default function Bonus({ onExit, source }: BonusProps) {
@@ -217,11 +228,10 @@ export default function Bonus({ onExit, source }: BonusProps) {
     [current],
   );
 
-  const onSubmit = useCallback(
-    (ev: FormEvent) => {
-      ev.preventDefault();
+  const answerWith = useCallback(
+    (raw: string) => {
       if (!activePart) return;
-      const answer = given.trim();
+      const answer = raw.trim();
       if (answer.length === 0) return;
 
       const judgement = judge(
@@ -241,8 +251,54 @@ export default function Bonus({ onExit, source }: BonusProps) {
       setGiven('');
       record(activePart, judgement.directive, answer);
     },
-    [activePart, given, record, settings.strictness],
+    [activePart, record, settings.strictness],
   );
+
+  const onSubmit = useCallback(
+    (ev: FormEvent) => {
+      ev.preventDefault();
+      answerWith(given);
+    },
+    [answerWith, given],
+  );
+
+  // --- Voice mode ---------------------------------------------------------
+  const voice = useVoiceSettings();
+  const lastResult = results[results.length - 1];
+
+  // Read each part as it comes up (the lead-in with the first), preceded by
+  // the verdict on the part just answered; then any moderator prompt.
+  const partKey = current && plan ? `${current.id}#${partIndex}` : null;
+  const prevPart = plan && partIndex > 0 ? plan.parts[partIndex - 1] : null;
+  const verdictText =
+    prevPart && lastResult
+      ? `${lastResult.directive === 'accept' ? 'Correct.' : 'Incorrect.'} The answer was ${spokenAnswer(prevPart.answerSanitized)}. `
+      : '';
+  const partText = !current
+    ? ''
+    : activePart
+      ? `${partIndex === 0 ? `${current.leadinSanitized} ` : ''}For ${activePart.value} points: ${activePart.prompt}`
+      : `That's ${earnedSoFar(results)} points on the bonus.`;
+  const partRead = useReadAloud(voice.read, partKey, verdictText + partText, rateForWpm(settings.wpm));
+  const promptRead = useReadAloud(
+    voice.read,
+    prompt && partKey ? `${partKey}#${prompt}` : null,
+    `Prompt. ${prompt ?? ''}`,
+  );
+
+  useEffect(() => stopSpeaking, []);
+
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && activePart !== null && partRead && promptRead,
+    (text) => {
+      setGiven(text);
+      answerWith(text);
+    },
+    `${current?.id}#${partIndex}#${prompt ?? ''}`,
+  );
+  useEffect(() => {
+    if (voiceAnswer.state === 'listening' && voiceAnswer.heard) setGiven(voiceAnswer.heard);
+  }, [voiceAnswer.state, voiceAnswer.heard]);
 
   const skipPart = useCallback(() => {
     if (!activePart) return;
@@ -381,6 +437,7 @@ export default function Bonus({ onExit, source }: BonusProps) {
                       <Button variant="ghost" small onClick={skipPart}>
                         I don't know
                       </Button>
+                      <VoiceAnswerStatus voice={voiceAnswer} />
                     </>
                   )}
                 </div>

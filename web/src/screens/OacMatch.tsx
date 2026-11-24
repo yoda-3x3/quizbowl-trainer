@@ -22,6 +22,8 @@ import {
   type CSSProperties,
 } from 'react';
 import type { OacPacket, OacTeam } from '../types';
+import { rateForWpm, speak, spokenAnswer, stopSpeaking } from '../voice/speech';
+import { VoiceAnswerStatus, useVoiceAnswer, useVoiceSettings } from '../voice/useVoice';
 import { OAC_SCORING } from '../types';
 import { append } from '../engine/log';
 import {
@@ -61,6 +63,7 @@ export default function OacMatch({
   teamNames?: Record<OacTeam, string>;
 }) {
   const [picked, setPicked] = useState<OacPacket | null>(null);
+  useEffect(() => stopSpeaking, []);
   const resolved = packet ?? picked;
   if (!resolved) {
     return <ServerPacketPicker onPick={setPicked} />;
@@ -345,6 +348,39 @@ function Directed({
   const d = state.directed;
   const [given, setGiven] = useState('');
   useEffect(() => setGiven(''), [d?.questionId, d?.phase]);
+
+  // Voice: read the question when it comes up, then listen once the clock runs.
+  const voice = useVoiceSettings();
+  const [talking, setTalking] = useState(false);
+  useEffect(() => {
+    if (!voice.read || !d || d.phase === 'done') return;
+    setTalking(true);
+    const stop = speak(d.question.prompt, {
+      rate: rateForWpm(state.config.wpm),
+      onEnd: () => setTalking(false),
+    });
+    return () => {
+      stop();
+      setTalking(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, d?.questionId]);
+  useEffect(() => {
+    if (!voice.read || !d || d.phase !== 'done') return;
+    speak(d.award === null ? `No score. The answer was ${spokenAnswer(d.question.answer)}.` : `${name(d.award.team)} scores ${d.award.points}.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, d?.phase === 'done', d?.questionId]);
+  const clockLive = d !== null && d.phase !== 'ready' && d.phase !== 'done';
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && clockLive && !talking,
+    (text) => {
+      if (!d || !text.trim()) return;
+      dispatch({ type: 'answer', team: onTheClock(state, Date.now()) ?? d.team, given: text });
+      setGiven('');
+    },
+    `${d?.questionId}#${d?.phase}#${d?.attempts}#${d?.pendingPrompt ?? ''}`,
+  );
+
   if (d === null) return null;
 
   const live = onTheClock(state, now);
@@ -395,6 +431,7 @@ function Directed({
               Submit
             </button>
           </form>
+          <VoiceAnswerStatus voice={voiceAnswer} />
         </>
       )}
 
@@ -423,6 +460,33 @@ function TossupPanel({
   const t = state.tossup;
   const [given, setGiven] = useState('');
   useEffect(() => setGiven(''), [t?.questionId, t?.buzz?.team]);
+
+  // Voice: read while the tossup is being read (resuming where the text is
+  // after a wrong buzz), listen for the team that buzzed, announce the result.
+  const voice = useVoiceSettings();
+  const reading = t !== null && t.phase === 'reading';
+  useEffect(() => {
+    if (!voice.read || !t || !reading) return;
+    const from = revealedWordCount(t, Date.now());
+    return speak(t.words.slice(from).join(' '), { rate: rateForWpm(state.config.wpm) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, reading, t?.questionId]);
+  useEffect(() => {
+    if (!voice.read || !t || t.phase !== 'done') return;
+    speak(t.award === null ? `No score. The answer was ${spokenAnswer(t.question.answer)}.` : `${name(t.award.team)} scores ${t.award.points}.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.read, t?.phase === 'done', t?.questionId]);
+  const buzzedTeam = t?.phase === 'buzzed' ? (t.buzz?.team ?? null) : null;
+  const voiceAnswer = useVoiceAnswer(
+    voice.answer && buzzedTeam !== null,
+    (text) => {
+      if (buzzedTeam === null || !text.trim()) return;
+      dispatch({ type: 'answer', team: buzzedTeam, given: text });
+      setGiven('');
+    },
+    `${t?.questionId}#${buzzedTeam}#${t?.pendingPrompt ?? ''}`,
+  );
+
   if (t === null) return null;
 
   const revealed = revealedWordCount(t, now);
@@ -487,6 +551,7 @@ function TossupPanel({
               Submit
             </button>
           </form>
+          <VoiceAnswerStatus voice={voiceAnswer} />
         </>
       ) : null}
 
