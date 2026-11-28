@@ -27,14 +27,13 @@ import LiveEarPanel from '../ear/LiveEarPanel';
 import PracticeSidebar from './PracticeSidebar';
 import {
   Button,
-  PillRow,
   Sheet,
-  StatPill,
   TextInput,
+  describeSelection,
   filtersFrom,
-  pct,
   useSettings,
 } from '../ui';
+import { tally } from './tossupTally';
 import type { AttemptEvent, Tossup as TossupQuestion } from '../types';
 import {
   rateForWpm,
@@ -124,6 +123,9 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
   const [protestError, setProtestError] = useState<string | null>(null);
   const [protestFiling, setProtestFiling] = useState(false);
   const [protestFiled, setProtestFiled] = useState(false);
+  // Character offset where the player buzzed, for QB Reader's "(#)" marker in
+  // the full text once the tossup resolves. null = no buzz on this question.
+  const [buzzChar, setBuzzChar] = useState<number | null>(null);
 
   const filters = useMemo(() => filtersFrom(settings), [settings]);
 
@@ -211,6 +213,7 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
     setProtestReason('');
     setProtestError(null);
     setProtestFiled(false);
+    setBuzzChar(null);
     reset(next);
     start();
     busyRef.current = false;
@@ -413,14 +416,13 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
   }, [voiceAnswer.state, voiceAnswer.heard]);
 
   const stats = useMemo(() => summary(events), [events]);
+  const counts = useMemo(() => tally(events), [events]);
 
   // Letter-by-letter reveal is driven by `revealedChars` into the joined
   // string. `revealed` (word count) is still the source of truth for scoring,
   // power detection and the status line — only the rendered text uses chars.
   const fullText = useMemo(() => reader.words.join(' '), [reader.words]);
   const shownChars = Math.min(reader.revealedChars, fullText.length);
-  const shown = fullText.slice(0, shownChars);
-  const rest = fullText.slice(shownChars);
   const powerRange = useMemo(() => {
     if (reader.powerIndex === null) return null;
     let start = 0;
@@ -433,14 +435,28 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
   const inPower =
     reader.powerIndex !== null && reader.revealed <= reader.powerIndex + 1;
 
+  // Remember where the buzz landed (first buzz only; a prompt keeps it).
+  useEffect(() => {
+    if (reader.phase === 'buzzed') setBuzzChar((b) => (b === null ? shownChars : b));
+    // Only the phase change matters; shownChars is frozen while buzzed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reader.phase]);
+
   // `.read--card` has a bounded height now (see theme.css) so a long tossup
   // scrolls instead of growing the card and pushing Buzz down the page; keep
   // the newest revealed word in view as it fills.
   useEffect(() => {
     const el = readCardRef.current;
     if (!el) return;
+    if (reader.phase === 'resolved') return;
     el.scrollTop = el.scrollHeight;
-  }, [shownChars]);
+  }, [shownChars, reader.phase]);
+
+  // New question: start the box at the top.
+  useEffect(() => {
+    const el = readCardRef.current;
+    if (el) el.scrollTop = 0;
+  }, [current?.id]);
 
   const result = reader.result;
   const accepted = result?.judgement.directive === 'accept';
@@ -460,32 +476,25 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
 
       <div className="practice-shell">
       <div className="app__body practice-main">
-        <PillRow>
-          <StatPill label="heard" value={String(stats.heard)} />
-          <StatPill
-            label="acc"
-            value={pct(stats.accuracy)}
-            tone={stats.accuracy >= 0.5 ? 'good' : 'neutral'}
-          />
-          <StatPill label="power" value={pct(stats.powerRate)} tone="gold" />
-          <StatPill
-            label="neg"
-            value={pct(stats.negRate)}
-            tone={stats.negRate > 0 ? 'bad' : 'neutral'}
-          />
-          <StatPill
-            label="buzz pt"
-            value={
-              stats.meanBuzzFraction === null
-                ? '-'
-                : pct(stats.meanBuzzFraction)
-            }
-            title="Mean buzz point as a fraction of question length"
-          />
-          <StatPill label="pts" value={String(stats.points)} tone="accent" />
-        </PillRow>
+        {/* QB Reader-style stat line: powers/tens/negs, then volume, points
+            and celerity (how early correct buzzes land, 1 = first word). */}
+        <div className="tossup-stats" aria-label="Session stats">
+          <span className="tossup-stats__line">
+            <strong className="nums" title="powers / tens / negs">
+              {counts.powers}/{counts.tens}/{counts.negs}
+            </strong>{' '}
+            with {stats.heard} tossup{stats.heard === 1 ? '' : 's'} heard
+            <span className="muted">
+              {' '}({stats.points} pts, celerity{' '}
+              {counts.celerity === null ? '-' : counts.celerity.toFixed(2)})
+            </span>
+          </span>
+          <span className="tossup-stats__filter muted" title="Category filter">
+            {describeSelection(settings)}
+          </span>
+        </div>
 
-        <div className="meta">
+        <div className="meta meta--fixed">
           <span>
             {current
               ? `${current.category} / ${current.subcategory}`
@@ -512,11 +521,6 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
             ) : null}
           </span>
         </div>
-        {starSaved ? (
-          <p className="tiny muted" role="status">
-            {starred ? 'Starred for later.' : 'Removed from starred.'}
-          </p>
-        ) : null}
 
         {loading && !current ? (
           <RankLoader label="Loading questions" />
@@ -528,34 +532,12 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
           <VoiceHiddenText />
         ) : (
           <p className="read read--card" ref={readCardRef}>
-            {powerRange ? (
-              <>
-                <span>{shown.slice(0, Math.min(shownChars, powerRange.start))}</span>
-                <span className="read__power">
-                  {shown.slice(
-                    Math.min(shownChars, powerRange.start),
-                    Math.min(shownChars, powerRange.end),
-                  )}
-                </span>
-                <span>{shown.slice(Math.min(shownChars, powerRange.end))}</span>
-              </>
-            ) : (
-              <span>{shown}</span>
-            )}
-            {reader.phase === 'resolved' ? (
-              rest.length > 0 ? (
-                <span className="read__rest">{rest}</span>
-              ) : null
-            ) : (
+            {renderText(fullText, shownChars, powerRange, buzzChar, reader.phase === 'resolved')}
+            {reader.phase === 'resolved' ? null : (
               <span className="read__caret" aria-hidden="true" />
             )}
           </p>
         )}
-        {copied ? (
-          <p className="tiny muted" role="status">
-            Question ID copied.
-          </p>
-        ) : null}
 
         {/* Vision trainer. Renders only when the question is about a work in
             the curated set, which is a small minority of questions. */}
@@ -585,7 +567,15 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
                 : 'muted',
           ].join(' ')}
         >
-          <span>{statusText(reader.phase, loading, dry)}</span>
+          <span role="status">
+            {starSaved
+              ? starred
+                ? 'starred for later'
+                : 'removed from starred'
+              : copied
+                ? 'question id copied'
+                : statusText(reader.phase, loading, dry)}
+          </span>
           <span className="nums">
             {reader.phase === 'buzzed' && reader.secondsLeft !== null ? (
               <span className="clock">{reader.secondsLeft}s</span>
@@ -598,6 +588,9 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
           </span>
         </div>
 
+        {/* Reserved slot: the prompt or result lands here without moving the
+            question box above it. */}
+        <div className="tossup-outcome">
         {reader.pendingPrompt ? (
           <div className="banner banner--prompt" role="status">
             <strong>Prompt</strong> {reader.pendingPrompt}
@@ -618,9 +611,13 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
                   : `Correct +${result.points}`
                 : `Incorrect ${result.points}`}
             </strong>
-            <p className="answerline">{current?.answerSanitized}</p>
+            <p className="answerline">
+              <span className="answerline__label">Answer:</span>{' '}
+              {current?.answerSanitized}
+            </p>
           </div>
         ) : null}
+        </div>
 
         {onProtest && result && current ? (
           protestFiled ? (
@@ -811,4 +808,54 @@ function statusText(
     default:
       return dry ? 'out of questions' : loading ? 'loading' : 'ready';
   }
+}
+
+/**
+ * The question text with the power span, the buzz marker, and (once resolved)
+ * the unread rest. Offsets are into `fullText`.
+ */
+function renderText(
+  fullText: string,
+  shownChars: number,
+  power: { start: number; end: number } | null,
+  buzzChar: number | null,
+  resolved: boolean,
+) {
+  const end = resolved ? fullText.length : shownChars;
+  // Cut points: power start/end, buzz, and where the read part ends.
+  const cuts = new Set<number>([0, end]);
+  if (power) {
+    cuts.add(Math.min(power.start, end));
+    cuts.add(Math.min(power.end, end));
+  }
+  if (buzzChar !== null) cuts.add(Math.min(buzzChar, end));
+  if (resolved) cuts.add(Math.min(shownChars, end));
+  const points = [...cuts].sort((a, b) => a - b);
+
+  const out: JSX.Element[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const from = points[i]!;
+    if (buzzChar !== null && from === Math.min(buzzChar, end) && resolved) {
+      out.push(
+        <span key={`buzz-${from}`} className="read__buzz" title="Where you buzzed">
+          (#)
+        </span>,
+      );
+    }
+    const to = points[i + 1];
+    if (to === undefined || to <= from) continue;
+    const text = fullText.slice(from, to);
+    const cls = [
+      power && from >= power.start && to <= power.end ? 'read__power' : '',
+      resolved && from >= shownChars ? 'read__rest' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    out.push(
+      <span key={from} className={cls || undefined}>
+        {text}
+      </span>,
+    );
+  }
+  return out;
 }

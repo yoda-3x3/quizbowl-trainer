@@ -56,12 +56,13 @@ describe('normalizeSettings', () => {
     expect(s.subcategories).toEqual(['Biology']);
   });
 
-  it('keeps any subcategory when no category is selected', () => {
+  it('infers the categories of subcategories stored without any', () => {
     const s = normalizeSettings({
       categories: [],
       subcategories: ['Biology', 'American History'],
     });
-    expect(s.subcategories).toEqual(['Biology', 'American History']);
+    expect(s.categories).toEqual(['History', 'Science']);
+    expect(s.subcategories).toEqual(['American History', 'Biology']);
   });
 
   it('rejects a non-numeric pace rather than storing NaN', () => {
