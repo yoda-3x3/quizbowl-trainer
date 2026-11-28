@@ -1,0 +1,258 @@
+/**
+ * Interface polish, after jakubkrehel/make-interfaces-feel-better.
+ *
+ * Loaded after theme.css (see main.tsx) so it refines the existing system
+ * rather than adding a second one. Everything is scoped off the admin
+ * dashboard, which stays deliberately bare black-and-white.
+ *
+ *  - Font smoothing on the root; balanced headings, pretty body text.
+ *  - Tabular numbers wherever a number updates in place.
+ *  - Shadows, not borders, for elevation (sheets, cards, buttons, pills,
+ *    chips). Borders stay where they mean structure or state: dividers,
+ *    inputs, the selected chip, the primary card, focus rings.
+ *  - Concentric radii: a sheet's corner = its inner controls' 8px + 14px
+ *    padding.
+ *  - One press scale, 0.96, on every pressable surface.
+ *  - Small controls get a 40px hit area via a pseudo-element.
+ */
+
+/* --- elevation tokens ---------------------------------------------------
+   Dark surfaces: one faint white ring (layered depth is invisible on dark).
+   Light surfaces: a black ring plus lift plus ambient, all transparent so
+   they sit on any painting or wash. Classic follows the OS scheme; painted
+   themes pin their own because their palettes don't follow the OS. */
+:root {
+  --shadow-border: 0 0 0 1px oklch(1 0 0 / 0.08);
+  --shadow-border-hover: 0 0 0 1px oklch(1 0 0 / 0.14);
+  --shadow-raised: 0 0 0 1px oklch(1 0 0 / 0.08), 0 8px 24px -12px oklch(0 0 0 / 0.6);
+  --radius-surface: 22px; /* 8px inner radius + 14px sheet padding */
+  --radius-card: 14px;
+  --press-scale: 0.96;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --shadow-border:
+      0 0 0 1px oklch(0 0 0 / 0.06),
+      0 1px 2px -1px oklch(0 0 0 / 0.06),
+      0 2px 4px 0 oklch(0 0 0 / 0.04);
+    --shadow-border-hover:
+      0 0 0 1px oklch(0 0 0 / 0.08),
+      0 1px 2px -1px oklch(0 0 0 / 0.08),
+      0 2px 4px 0 oklch(0 0 0 / 0.06);
+    --shadow-raised:
+      0 0 0 1px oklch(0 0 0 / 0.06),
+      0 1px 2px -1px oklch(0 0 0 / 0.06),
+      0 8px 24px -10px oklch(0 0 0 / 0.18);
+  }
+}
+
+.app:is([data-theme='art'], [data-theme='science'], [data-theme='literature'], [data-theme='mythology']) {
+  --shadow-border: 0 0 0 1px oklch(1 0 0 / 0.08);
+  --shadow-border-hover: 0 0 0 1px oklch(1 0 0 / 0.14);
+  --shadow-raised: 0 0 0 1px oklch(1 0 0 / 0.08), 0 8px 24px -12px oklch(0 0 0 / 0.6);
+}
+
+.app[data-theme='math'] {
+  --shadow-border:
+    0 0 0 1px oklch(0 0 0 / 0.06),
+    0 1px 2px -1px oklch(0 0 0 / 0.06),
+    0 2px 4px 0 oklch(0 0 0 / 0.04);
+  --shadow-border-hover:
+    0 0 0 1px oklch(0 0 0 / 0.08),
+    0 1px 2px -1px oklch(0 0 0 / 0.08),
+    0 2px 4px 0 oklch(0 0 0 / 0.06);
+  --shadow-raised:
+    0 0 0 1px oklch(0 0 0 / 0.06),
+    0 1px 2px -1px oklch(0 0 0 / 0.06),
+    0 8px 24px -10px oklch(0 0 0 / 0.18);
+}
+
+/* --- typography ---------------------------------------------------------- */
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.app:not(.app--admin) :is(h1, h2, h3, .sheet__title, .mode-card__title, .rank-loader__title) {
+  text-wrap: balance;
+}
+
+.app:not(.app--admin) :is(p, .mode-card__body, .field__hint, .rank-title) {
+  text-wrap: pretty;
+}
+
+:is(
+    .pill__value,
+    .rank-badge__elo,
+    .rank-badge__stats,
+    .leaderboard__position,
+    .leaderboard__elo,
+    .h2h__side-score,
+    .catpick__count
+  ) {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- surfaces: shadows for elevation, concentric radii ------------------- */
+
+.app:not(.app--admin) .sheet {
+  border-color: transparent;
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.app:not(.app--admin) .mode-card {
+  border-color: transparent;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-border);
+  transition-property: box-shadow, transform, background-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: ease-out;
+}
+
+.app:not(.app--admin) .mode-card:hover {
+  box-shadow: var(--shadow-border-hover), 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* The primary card's accent ring is state ("start here"), so it stays. */
+.app:not(.app--admin) .mode-card--primary {
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow-raised);
+}
+
+.app:not(.app--admin) :is(.btn:not(.btn--primary):not(.btn--buzz):not(.btn--danger), .pill, .chip) {
+  border-color: transparent;
+  box-shadow: var(--shadow-border);
+}
+
+.app:not(.app--admin) .btn:not(.btn--primary):not(.btn--buzz):not(.btn--danger):hover:not(:disabled) {
+  border-color: transparent;
+  box-shadow: var(--shadow-border-hover);
+}
+
+.app:not(.app--admin) .btn {
+  transition-property: opacity, transform, box-shadow, background-color, color;
+}
+
+/* A selected chip is state, so it keeps a visible ring in the accent. */
+.app:not(.app--admin) .chip[aria-pressed='true'] {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.app:not(.app--admin) .chip {
+  transition-property: color, box-shadow, background-color, transform;
+}
+
+/* The rank card sits inside a 14px-padded sheet: 22 - 14 = 8. */
+.rank-badge--card {
+  border-radius: 8px;
+}
+
+.rank-loader {
+  border-radius: var(--radius-card);
+  border-color: transparent;
+  box-shadow: var(--shadow-raised), 0 0 0 1px color-mix(in srgb, var(--rank-color) 30%, transparent);
+}
+
+/* --- press feedback: one scale everywhere -------------------------------- */
+
+.app:not(.app--admin) :is(.btn, .chip, .mode-card):active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+/* --- hit areas ------------------------------------------------------------
+   Visible controls smaller than 40px get an invisible extension. */
+.btn--sm,
+.star-toggle {
+  position: relative;
+}
+
+.btn--sm::before,
+.star-toggle::before {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: max(100%, 40px);
+  height: max(100%, 40px);
+  transform: translate(-50%, -50%);
+}
+
+/* --- God's title ----------------------------------------------------------
+   "The rank promised to you 3000 years ago": a gold, slightly serif tag
+   worn beside whoever holds God, everywhere their rank shows. */
+.rank-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  align-self: flex-start;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-family: Georgia, 'Iowan Old Style', serif;
+  font-style: italic;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: #fbe7a6;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.24), rgba(120, 92, 20, 0.18));
+  box-shadow:
+    0 0 0 1px rgba(233, 201, 92, 0.45),
+    0 0 14px -2px rgba(255, 220, 140, 0.35);
+}
+
+.rank-title__star {
+  font-style: normal;
+  font-size: 13px;
+  color: #ffe9a8;
+  text-shadow: 0 0 8px rgba(255, 233, 168, 0.8);
+}
+
+/* On light surfaces the pale gold would wash out, so deepen it. */
+@media (prefers-color-scheme: light) {
+  .app[data-theme='classic'] .rank-title {
+    color: #6b4f0c;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.22), rgba(240, 210, 120, 0.2));
+  }
+  .app[data-theme='classic'] .rank-title__star {
+    color: #a07a12;
+    text-shadow: none;
+  }
+}
+
+.app[data-theme='math'] .rank-title {
+  color: #6b4f0c;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.22), rgba(240, 210, 120, 0.2));
+}
+
+.app[data-theme='math'] .rank-title__star {
+  color: #a07a12;
+  text-shadow: none;
+}
+
+.rank-badge--card .rank-title {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* The God row on the leaderboard: let the name wrap so the title fits. */
+.leaderboard__row--god .leaderboard__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  white-space: normal;
+}
+
+.leaderboard__row--god {
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.1), transparent 70%);
+  border-radius: 8px;
+}
+
+/* The ✡ crest reads small at the old glyph size; give it room. */
+.rank-badge--god .rank-badge__glyph--lg {
+  font-size: 34px;
+}
