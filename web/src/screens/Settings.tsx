@@ -44,6 +44,7 @@ import { useAuth } from '../auth';
 import { useMyRating, type RatingPublic } from '../rank';
 import { visualForRank } from '../rankVisuals';
 import RankBadge from '../RankBadge';
+import { openProfile } from '../profile';
 import SignIn from './SignIn';
 import SignUp from './SignUp';
 import VoiceToggles from '../voice/VoiceToggles';
@@ -141,6 +142,9 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
                   <p className="tiny muted">Loading rank.</p>
                 ) : null}
                 <div className="row">
+                  <Button small onClick={() => openProfile(auth.user?.id ?? 0)}>
+                    Your profile
+                  </Button>
                   <Button
                     small
                     variant="ghost"

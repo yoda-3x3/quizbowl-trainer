@@ -32,6 +32,11 @@ export interface PlayerView {
   lockedOut: boolean;
   /** Set only in a room attached to a bracket match (see `attachMatch`). */
   side?: Side;
+  /**
+   * The player's account id when they joined signed in, so clients can show
+   * their tags and link to /api/profile/:userId. Absent for guests.
+   */
+  userId?: number;
 }
 
 /**

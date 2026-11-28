@@ -26,6 +26,8 @@ import { Button, Field, Sheet, TextInput } from '../ui';
 import { createRoom } from '../room/client';
 import { useRoom } from '../room/useRoom';
 import { CODE_ALPHABET, CODE_LENGTH } from '../../workers/room/protocol';
+import { PlayerName, TagChips } from '../TagChips';
+import { useTags } from '../profile';
 import './Rooms.css';
 
 const CODE_LEN = CODE_LENGTH;
@@ -253,6 +255,7 @@ function InRoom({
   const iHoldBuzz = snap?.buzzer != null && snap.buzzer === me;
   const myLockout =
     snap?.players.find((p) => p.id === me)?.lockedOut ?? false;
+  const tags = useTags((snap?.players ?? []).map((p) => p.userId));
 
   useEffect(() => {
     if (iHoldBuzz) inputRef.current?.focus();
@@ -335,7 +338,8 @@ function InRoom({
                 .filter(Boolean)
                 .join(' ')}
             >
-              <span>{p.name}</span>
+              <PlayerName name={p.name} userId={p.userId} />
+              <TagChips tags={p.userId ? tags[p.userId] : undefined} max={2} />
               <span className="player-chip__score">{p.score}</span>
               {p.lockedOut ? (
                 <span className="player-chip__out">out</span>

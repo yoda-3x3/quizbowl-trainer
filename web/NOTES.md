@@ -297,3 +297,50 @@ that is the natural next step and belongs to whoever owns the bank.
     records the extension per theme in its `SOURCES` map and
     `ThemeBackdrop.THEME_VISUALS` references `/themes/math.png`
     accordingly.
+
+## Category tags + public profiles
+
+Per-category stats are server-side for signed-in users (migration
+`0010_category_stats.sql`, module `workers/room/profile.ts`). The client
+uploads its existing AttemptEvent log to `POST /api/stats/attempts`
+(`src/profile.ts` → `useStatsSync`, on sign-in, every minute and when the tab
+is hidden); only id, time, mode, category, buzz/power word indexes, directive
+and points are sent, never answer or question text. The server dedupes on the
+event id and recomputes `user_category_stats` for the categories a batch
+touched.
+
+Tag rules (computed on the server, constants at the top of `profile.ts`):
+
+- A player **qualifies** in a category with **20+ questions heard** there and
+  either **60%+ accuracy** or (over 20+ tossups) a **20%+ power rate**
+  (powers / tossups heard).
+- **Philosopher** = qualifies in both Fine Arts *and* Philosophy. One tag each
+  for the other categories: Bard (Literature), Chronicler (History),
+  Alchemist (Science), Oracle (Mythology), Theologian (Religion),
+  Cartographer (Geography), Analyst (Social Science), Herald (Current
+  Events), Savant (Other Academic), Trendsetter (Pop Culture).
+  **Polymath** = qualifies in 5+ categories.
+- **`#1 in <category>`** = the single non-banned player with 20+ heard and
+  the highest accuracy + power rate there (ties: more heard, then lower id).
+
+Tags show on the leaderboard, in rooms and H2H matches (the Worker resolves
+the session on the websocket upgrade and passes the account id to the Room DO
+as `x-qb-user-id`, so `PlayerView.userId` is set for signed-in players), and on
+the profile.
+
+Profiles are public at `GET /api/profile/:userId` (nickname, join date,
+ELO/rank, tags, per-category accuracy / power rate / buzz point, recent
+attempts and Quick Play results; no role, ban state or answer text) and in
+the app at the hash route **`/#/u/<id>`**, which opens over whatever tab is
+showing. "Your profile" is in Settings → Account; any linked player name opens
+theirs.
+
+Not counted yet: multiplayer room buzzes (the Room DO resolves them but does
+not write `stat_attempts`), and events logged on a device before signing in
+are attributed to whichever account signs in there first.
+
+### Forum (planned, not built)
+
+A forum is planned for later. It should link post authors to `/#/u/<id>`
+(the `url` field of `/api/profile/:userId`) and can reuse `GET /api/tags` to
+show tags next to author names. Nothing forum-specific exists yet.
