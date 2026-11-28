@@ -146,125 +146,47 @@ input {
   flex: 1;
   min-height: 0;
   animation: qbt-page-in var(--dur-medium) var(--ease-emphasized);
-  /* Snapshotted on its own for the book page-turn (see pageFlip.ts). */
-  view-transition-name: page;
 }
 
-/* --- Book page-turn between screens --------------------------------------
-   Forward: the old page turns over its left edge (the spine) to reveal the
-   new one beneath. Back: the earlier page swings back over from the left and
-   lands on top. Only .tab-page turns; everything else (tab bar, backdrop)
-   just switches, so the root transition is switched off. The small fade-in
-   above is suppressed during a flip so the new page lies still under the
-   turning one. */
-:root[data-flip] .tab-page {
-  animation: none;
-  /* Opaque paper while turning, so the page beneath doesn't show through. */
-  background: var(--bg);
+/* --- Quick slide between screens (see pageFlip.ts) -----------------------
+   The new page slides in with a slight swing: from the right going forward,
+   from the left going back. A plain entrance animation on the remounted
+   page, so it starts immediately with nothing to snapshot. */
+:root[data-slide='forward'] .tab-page {
+  animation: qbt-slide-in-forward 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: right center;
 }
 
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
-
-::view-transition-group(page) {
-  animation-duration: 0.7s;
-}
-
-::view-transition-image-pair(page) {
-  perspective: 2200px;
-  isolation: isolate;
-}
-
-::view-transition-old(page),
-::view-transition-new(page) {
-  /* Pages are opaque paper, not a crossfade. */
-  mix-blend-mode: normal;
-  backface-visibility: hidden;
+:root[data-slide='back'] .tab-page {
+  animation: qbt-slide-in-back 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   transform-origin: left center;
-  animation-duration: 0.7s;
-  animation-timing-function: cubic-bezier(0.45, 0.05, 0.25, 1);
-  animation-fill-mode: both;
 }
 
-:root[data-flip='forward']::view-transition-old(page) {
-  z-index: 2;
-  animation-name: qbt-page-turn-away;
-}
-
-:root[data-flip='forward']::view-transition-new(page) {
-  z-index: 1;
-  animation-name: qbt-page-uncover;
-}
-
-:root[data-flip='back']::view-transition-new(page) {
-  z-index: 2;
-  animation-name: qbt-page-turn-back;
-}
-
-:root[data-flip='back']::view-transition-old(page) {
-  z-index: 1;
-  animation-name: qbt-page-cover;
-}
-
-@keyframes qbt-page-turn-away {
-  0% {
-    transform: rotateY(0deg);
-    filter: brightness(1);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+@keyframes qbt-slide-in-forward {
+  from {
+    opacity: 0;
+    transform: perspective(1400px) translateX(36px) rotateY(-5deg);
   }
-  45% {
-    filter: brightness(0.9);
-    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
-  }
-  100% {
-    transform: rotateY(-180deg);
-    filter: brightness(0.7);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
-@keyframes qbt-page-turn-back {
-  0% {
-    transform: rotateY(-180deg);
-    filter: brightness(0.7);
+@keyframes qbt-slide-in-back {
+  from {
+    opacity: 0;
+    transform: perspective(1400px) translateX(-36px) rotateY(5deg);
   }
-  55% {
-    filter: brightness(0.9);
-    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
-  }
-  100% {
-    transform: rotateY(0deg);
-    filter: brightness(1);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  }
-}
-
-/* The page underneath sits in the turning page's shadow until it clears. */
-@keyframes qbt-page-uncover {
-  0% {
-    filter: brightness(0.75);
-  }
-  100% {
-    filter: brightness(1);
-  }
-}
-
-@keyframes qbt-page-cover {
-  0% {
-    filter: brightness(1);
-  }
-  100% {
-    filter: brightness(0.75);
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(page),
-  ::view-transition-old(page),
-  ::view-transition-new(page) {
-    animation: none;
+  :root[data-slide] .tab-page {
+    animation: qbt-page-in 0.15s ease-out both;
   }
 }
 

@@ -56,7 +56,7 @@ export default function App() {
   const [settings] = useSettings();
   const theme = settings.theme;
 
-  // Every screen change turns the page like a book: forward to a later tab or
+  // Every screen change slides the new page in: forward from a later tab or
   // into a practice mode, back to an earlier tab or out to the practice home.
   const setTab = (next: TabId) => {
     if (next === tab) return;
@@ -121,7 +121,9 @@ export default function App() {
           it, React would just patch the existing DOM and no transition would
           fire. Each tab's own component is prop-driven from state that lives
           in App (practice/theme/etc.), so remounting it loses nothing. */}
-      <div className="tab-page" key={tab}>
+      {/* The practice view is in the key too, so entering or leaving a
+          practice mode slides like a tab switch does. */}
+      <div className="tab-page" key={tab === 'practice' ? `practice:${practice}` : tab}>
         {tab === 'practice' ? (
           <Practice
             view={practice}
