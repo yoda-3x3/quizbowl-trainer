@@ -37,6 +37,9 @@ export const VISUAL_TIERS = [
 ] as const;
 export type VisualTier = (typeof VISUAL_TIERS)[number];
 
+/** The title whoever holds God (#1 on the leaderboard) wears beside it. */
+export const GOD_TITLE = 'The rank promised to you 3000 years ago';
+
 export type LoaderMotif =
   | 'ember'
   | 'sprout'
@@ -191,7 +194,8 @@ const VISUALS: Record<VisualTier, Omit<TierVisual, 'tier' | 'level'>> = {
   },
   God: {
     color: '#ffe9a8',
-    glyph: '☀',
+    // The Star of David stays the God crest, as it was before tier visuals.
+    glyph: '✡',
     auraStrength: 1,
     auraSpeed: 2.2,
     auraHalo: true,

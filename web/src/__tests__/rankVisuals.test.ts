@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import {
+  GOD_TITLE,
   VISUAL_TIERS,
   auraStyle,
   backdropBackground,
@@ -70,6 +71,16 @@ describe('tierVisual', () => {
       expect(b.image).toMatch(/^\/ranks\/[a-z]+\.jpg$/);
       expect(b.credit).toBeTruthy();
     }
+  });
+
+  it('God keeps the Star of David crest and wears the promised-rank title', () => {
+    expect(tierVisual('God').glyph).toBe('✡');
+    expect(GOD_TITLE).toBe('The rank promised to you 3000 years ago');
+    const card = renderToString(createElement(RankBadge, { rating: rating('King', true) }));
+    expect(card).toContain('✡');
+    expect(card).toContain(GOD_TITLE);
+    const knight = renderToString(createElement(RankBadge, { rating: rating('Knight') }));
+    expect(knight).not.toContain(GOD_TITLE);
   });
 
   it('God gets The Creation of Adam', () => {

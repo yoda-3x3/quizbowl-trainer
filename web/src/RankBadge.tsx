@@ -19,7 +19,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import type { RatingPublic } from './rank';
-import { auraStyle, visualForRank, type TierVisual } from './rankVisuals';
+import { GOD_TITLE, auraStyle, visualForRank, type TierVisual } from './rankVisuals';
 
 const TIER_WIDTH = 500;
 const SUBRANK_WIDTH = 100;
@@ -69,6 +69,19 @@ export function RankAura({
   );
 }
 
+/** The tag whoever holds God wears: on their rank card, beside their name on
+ *  the leaderboard and on their profile. */
+export function RankTitle({ plain = false }: { plain?: boolean }) {
+  return (
+    <span className={`rank-title${plain ? ' rank-title--plain' : ''}`}>
+      <span className="rank-title__star" aria-hidden="true">
+        ✡
+      </span>
+      {GOD_TITLE}
+    </span>
+  );
+}
+
 export default function RankBadge({ rating, variant = 'card', plain = false }: RankBadgeProps) {
   const visual = visualForRank(rating.rank);
   const isGod = visual.tier === 'God';
@@ -76,7 +89,7 @@ export default function RankBadge({ rating, variant = 'card', plain = false }: R
   const godClass = isGod && !plain ? ' rank-badge--god' : '';
   const plainClass = plain ? ' rank-badge--plain' : '';
   const style = (plain ? {} : { '--rank-color': visual.color }) as CSSProperties;
-  const title = `${rating.rank.label} • ${rating.elo} ELO`;
+  const title = `${rating.rank.label}${isGod ? ` — ${GOD_TITLE}` : ''} • ${rating.elo} ELO`;
 
   let badge: ReactNode;
   if (variant === 'mini') {
@@ -133,7 +146,7 @@ export default function RankBadge({ rating, variant = 'card', plain = false }: R
               />
             </div>
           ) : (
-            <div className="tiny muted">Rank #1 &mdash; called by god</div>
+            <RankTitle />
           )}
         </div>
       </div>

@@ -6,7 +6,7 @@
 
 import { Button, Sheet } from '../ui';
 import { useLeaderboard } from '../rank';
-import RankBadge from '../RankBadge';
+import RankBadge, { RankTitle } from '../RankBadge';
 import { PlayerName, TagChips } from '../TagChips';
 import { useTags } from '../profile';
 import './Tournaments.css';
@@ -46,11 +46,15 @@ export default function Leaderboard({ onExit }: { onExit(): void }) {
           <Sheet>
             <div className="leaderboard">
               {board.entries.map((e) => (
-                <div key={e.user_id} className="leaderboard__row">
+                <div
+                  key={e.user_id}
+                  className={`leaderboard__row${e.rank.is_god ? ' leaderboard__row--god' : ''}`}
+                >
                   <span className="leaderboard__position">#{e.position}</span>
                   <span className="leaderboard__name">
                     <PlayerName name={e.username} userId={e.user_id} />{' '}
                     <TagChips tags={tags[e.user_id]} max={3} />
+                    {e.rank.is_god ? <RankTitle /> : null}
                   </span>
                   <RankBadge rating={e} variant="compact" />
                   <span className="leaderboard__elo tiny muted">{e.elo} ELO</span>
