@@ -3,6 +3,7 @@ import {
   canListen,
   canSpeak,
   listen,
+  pickVoice,
   rateForWpm,
   speak,
   spokenAnswer,
@@ -94,5 +95,27 @@ describe('voice settings', () => {
     const junk = normalizeSettings({ voiceRead: 'yes', voiceAnswer: 1 });
     expect(junk.voiceRead).toBe(false);
     expect(junk.voiceAnswer).toBe(false);
+  });
+});
+
+describe('pickVoice', () => {
+  const v = (name: string, lang: string, localService = false, isDefault = false) =>
+    ({ name, lang, localService, default: isDefault, voiceURI: name }) as SpeechSynthesisVoice;
+
+  it('prefers a natural/neural US voice over local robotic ones', () => {
+    const voices = [
+      v('Microsoft David - English (United States)', 'en-US', true, true),
+      v('Google US English', 'en-US'),
+      v('Microsoft Aria Online (Natural) - English (United States)', 'en-US'),
+    ];
+    expect(pickVoice(voices)?.name).toMatch(/Aria Online \(Natural\)/);
+  });
+
+  it('falls back to Google, then a local voice, and ignores non-English', () => {
+    expect(pickVoice([v('Thomas', 'fr-FR', true, true), v('Google US English', 'en-US')])?.name).toBe(
+      'Google US English',
+    );
+    expect(pickVoice([v('Thomas', 'fr-FR', true, true), v('David', 'en-US', true)])?.name).toBe('David');
+    expect(pickVoice([v('Thomas', 'fr-FR', true, true)])).toBeNull();
   });
 });

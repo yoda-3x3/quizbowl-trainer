@@ -65,9 +65,11 @@ export default defineConfig({
   server: {
     port: 5180,
     proxy: {
-      // `npx wrangler dev` serves the room Worker on 8787.
+      // `npx wrangler dev` serves the room Worker on 8787. QB_API_TARGET points
+      // it at a deployed Worker instead (e.g. dev-quizbowl-rooms), for things
+      // local wrangler can't run, like the Workers AI voice.
       '/api': {
-        target: 'http://127.0.0.1:8787',
+        target: process.env.QB_API_TARGET ?? 'http://127.0.0.1:8787',
         changeOrigin: true,
         ws: true,
       },

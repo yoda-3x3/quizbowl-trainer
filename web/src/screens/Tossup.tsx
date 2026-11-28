@@ -44,6 +44,7 @@ import {
 } from '../voice/speech';
 import {
   VoiceAnswerStatus,
+  VoiceHiddenText,
   useReadAloud,
   useVoiceAnswer,
   useVoiceSettings,
@@ -442,6 +443,8 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
 
   const result = reader.result;
   const accepted = result?.judgement.directive === 'accept';
+  // Read-aloud means playing by ear: no text until the tossup is resolved.
+  const hideForVoice = voice.read && current !== null && reader.phase !== 'resolved';
 
   return (
     <>
@@ -518,6 +521,8 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
           <p className="read read--card muted" ref={readCardRef}>
             <em>Question hidden. Press K to show it again.</em>
           </p>
+        ) : hideForVoice ? (
+          <VoiceHiddenText />
         ) : (
           <p className="read read--card" ref={readCardRef}>
             {powerRange ? (
