@@ -85,7 +85,15 @@
 
 .rank-aura--block {
   display: flex;
-  border-radius: var(--radius, 10px);
+  /* Must equal .rank-badge--card's radius, or the glow's corners pull away
+     from the card's corners and leave a dark sliver between them. */
+  border-radius: 8px;
+}
+
+/* The badge's own border is the aura's inner edge: tint it with the tier
+   colour so border and glow read as one continuous light, no dark band. */
+.rank-aura > .rank-badge {
+  border-color: color-mix(in srgb, var(--rank-color) 70%, transparent);
 }
 
 .rank-aura--block > .rank-badge {
@@ -111,10 +119,13 @@
 .rank-aura[data-halo]::after {
   content: '';
   position: absolute;
-  inset: -2px;
-  z-index: -1;
+  /* Sits exactly on the badge's 1px border (above it, masked to a ring),
+     so the spinning light IS the border rather than a second ring outside
+     it with a gap between the two. */
+  inset: 0;
+  z-index: 1;
   border-radius: inherit;
-  padding: 2px;
+  padding: 1px;
   pointer-events: none;
   background: conic-gradient(
     from var(--aura-angle),
@@ -169,12 +180,10 @@
 @keyframes rank-aura-breathe {
   0%,
   100% {
-    opacity: calc(0.25 + 0.45 * var(--aura-strength));
-    transform: scale(1);
+    opacity: calc(0.4 + 0.35 * var(--aura-strength));
   }
   50% {
-    opacity: calc(0.45 + 0.55 * var(--aura-strength));
-    transform: scale(calc(1 + 0.05 * var(--aura-strength)));
+    opacity: calc(0.55 + 0.45 * var(--aura-strength));
   }
 }
 
