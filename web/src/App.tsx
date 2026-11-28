@@ -32,6 +32,7 @@ import Tournaments from './screens/Tournaments';
 import Admin from './screens/Admin';
 import { Button, Sheet, TabBar, useSettings, type TabItem } from './ui';
 import { useShortcuts } from './shortcuts';
+import { directionBetween, flipPage } from './ui/pageFlip';
 import { useAuth } from './auth';
 import ThemeBackdrop from './ThemeBackdrop';
 
@@ -47,14 +48,25 @@ const TABS: readonly TabItem<TabId>[] = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>('practice');
-  const [practice, setPractice] = useState<PracticeView>('home');
+  const [tab, setTabNow] = useState<TabId>('practice');
+  const [practice, setPracticeNow] = useState<PracticeView>('home');
   const [showHelp, setShowHelp] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const auth = useAuth();
   const [settings] = useSettings();
   const theme = settings.theme;
 
+  // Every screen change turns the page like a book: forward to a later tab or
+  // into a practice mode, back to an earlier tab or out to the practice home.
+  const setTab = (next: TabId) => {
+    if (next === tab) return;
+    const order = TABS.map((t) => t.id);
+    flipPage(() => setTabNow(next), directionBetween(order, tab, next));
+  };
+  const setPractice = (next: PracticeView) => {
+    if (next === practice) return;
+    flipPage(() => setPracticeNow(next), next === 'home' ? 'back' : 'forward');
+  };
   const toHome = () => setPractice('home');
   const isAdmin = auth.user?.role === 'admin';
 
