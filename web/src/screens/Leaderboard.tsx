@@ -1,7 +1,7 @@
 /**
  * Public ELO leaderboard. #1 wears the God rank; everyone else shows their
- * feudal tier. Reachable from the Tournaments tab since rank is primarily
- * earned through Quick Play and tournament play.
+ * feudal tier. Has its own tab (Ranks) and opens when you tap your rank in
+ * the top bar.
  *
  * Lists every player (`?all=1`), not just the rated ones: anyone without a
  * rated match yet sits at the start ELO, marked "unrated". The ELO chart
@@ -9,17 +9,18 @@
  * list is the chart's table view.
  */
 
-import { Button, Sheet } from "../ui";
-import { useLeaderboard } from "../rank";
-import RankBadge, { RankTitle } from "../RankBadge";
-import { PlayerName, TagChips } from "../TagChips";
-import { useTags } from "../profile";
-import { useAuth } from "../auth";
-import EloChart from "../EloChart";
-import "./Tournaments.css";
-import "../EloChart.css";
+import { Button, Sheet } from '../ui';
+import { useLeaderboard } from '../rank';
+import RankBadge, { RankTitle } from '../RankBadge';
+import { PlayerName, TagChips } from '../TagChips';
+import { useTags } from '../profile';
+import { useAuth } from '../auth';
+import EloChart from '../EloChart';
+import './Tournaments.css';
+import '../EloChart.css';
 
-export default function Leaderboard({ onExit }: { onExit(): void }) {
+/** Its own tab now, so `onExit` is optional: only an overlay needs Done. */
+export default function Leaderboard({ onExit }: { onExit?(): void }) {
   const board = useLeaderboard(2000, true);
   const auth = useAuth();
   const meId = auth.user?.id ?? null;
@@ -34,9 +35,11 @@ export default function Leaderboard({ onExit }: { onExit(): void }) {
           <Button variant="ghost" small onClick={() => void board.refresh()}>
             Refresh
           </Button>
-          <Button variant="ghost" small onClick={onExit}>
-            Done
-          </Button>
+          {onExit ? (
+            <Button variant="ghost" small onClick={onExit}>
+              Done
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -70,13 +73,13 @@ export default function Leaderboard({ onExit }: { onExit(): void }) {
                 {board.entries.map((e) => (
                   <div
                     key={e.user_id}
-                    className={`leaderboard__row${e.rank.is_god ? " leaderboard__row--god" : ""}${
-                      e.user_id === meId ? " leaderboard__row--me" : ""
+                    className={`leaderboard__row${e.rank.is_god ? ' leaderboard__row--god' : ''}${
+                      e.user_id === meId ? ' leaderboard__row--me' : ''
                     }`}
                   >
                     <span className="leaderboard__position">#{e.position}</span>
                     <span className="leaderboard__name">
-                      <PlayerName name={e.username} userId={e.user_id} />{" "}
+                      <PlayerName name={e.username} userId={e.user_id} />{' '}
                       <TagChips tags={tags[e.user_id]} max={3} />
                       {e.rank.is_god ? <RankTitle /> : null}
                     </span>
@@ -84,9 +87,7 @@ export default function Leaderboard({ onExit }: { onExit(): void }) {
                     {e.rated === false ? (
                       <span className="leaderboard__unrated">unrated</span>
                     ) : null}
-                    <span className="leaderboard__elo tiny muted">
-                      {e.elo} ELO
-                    </span>
+                    <span className="leaderboard__elo tiny muted">{e.elo} ELO</span>
                   </div>
                 ))}
               </div>

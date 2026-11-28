@@ -38,9 +38,10 @@ import ThemeBackdrop from './ThemeBackdrop';
 import RankBadge from './RankBadge';
 import { useMyRank } from './myRank';
 import Profile from './screens/Profile';
+import Leaderboard from './screens/Leaderboard';
 import { closeProfile, useProfileRoute, useStatsSync } from './profile';
 
-type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'settings';
+type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'leaderboard' | 'settings';
 type PracticeView = 'home' | PracticeMode;
 
 const TABS: readonly TabItem<TabId>[] = [
@@ -48,6 +49,7 @@ const TABS: readonly TabItem<TabId>[] = [
   { id: 'learn', label: 'Learn', glyph: '◈' },
   { id: 'rooms', label: 'Rooms', glyph: '▦' },
   { id: 'tournaments', label: 'Tourneys', glyph: '♛' },
+  { id: 'leaderboard', label: 'Ranks', glyph: '♔' },
   { id: 'settings', label: 'Settings', glyph: '⚙' },
 ];
 
@@ -90,7 +92,8 @@ export default function App() {
       '2': () => setTab('learn'),
       '3': () => setTab('rooms'),
       '4': () => setTab('tournaments'),
-      '5': () => setTab('settings'),
+      '5': () => setTab('leaderboard'),
+      '6': () => setTab('settings'),
       a: () => {
         if (isAdmin) setShowAdmin(true);
       },
@@ -169,6 +172,8 @@ export default function App() {
 
         {tab === 'tournaments' ? <Tournaments /> : null}
 
+        {tab === 'leaderboard' ? <Leaderboard /> : null}
+
         {tab === 'settings' ? (
           <SettingsScreen onOpenAdmin={() => setShowAdmin(true)} />
         ) : null}
@@ -185,9 +190,19 @@ export default function App() {
         }}
       />
       {myRank ? (
-        <div className="topbar-rank" data-testid="topbar-rank">
+        // Tapping your rank anywhere opens the leaderboard tab.
+        <button
+          type="button"
+          className="topbar-rank"
+          data-testid="topbar-rank"
+          aria-label={`${myRank.rank.label}, ${myRank.elo} ELO. Open the leaderboard`}
+          onClick={() => {
+            closeProfile();
+            setTab('leaderboard');
+          }}
+        >
           <RankBadge rating={myRank} variant="topbar" />
-        </div>
+        </button>
       ) : null}
       <div
         className="pre-alpha-badge"
@@ -232,7 +247,7 @@ function ShortcutsHelp({
             </Button>
           }
         >
-          <ShortcutRow keys={['1', '2', '3', '4', '5']} label="Switch tabs (Practice, Learn, Rooms, Tourneys, Settings)" />
+          <ShortcutRow keys={['1', '2', '3', '4', '5', '6']} label="Switch tabs (Practice, Learn, Rooms, Tourneys, Ranks, Settings)" />
           <ShortcutRow keys={['T']} label="Tossups" />
           <ShortcutRow keys={['B']} label="Bonuses" />
           <ShortcutRow keys={['R']} label="Replay starred questions" />

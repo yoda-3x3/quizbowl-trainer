@@ -19,7 +19,6 @@ import {
   type TournamentSummary,
 } from '../tournaments';
 import TournamentDetail from './TournamentDetail';
-import Leaderboard from './Leaderboard';
 import QuickPlay from './QuickPlay';
 import './Tournaments.css';
 
@@ -44,7 +43,6 @@ export default function Tournaments() {
   const list = useTournamentList();
   const [openId, setOpenId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showQuickPlay, setShowQuickPlay] = useState(false);
 
   const byState = useMemo(() => {
@@ -71,10 +69,6 @@ export default function Tournaments() {
     );
   }
 
-  if (showLeaderboard) {
-    return <Leaderboard onExit={() => setShowLeaderboard(false)} />;
-  }
-
   if (showQuickPlay) {
     return <QuickPlay onExit={() => setShowQuickPlay(false)} />;
   }
@@ -86,9 +80,6 @@ export default function Tournaments() {
       <header className="topbar">
         <h1 className="topbar__title">Tournaments</h1>
         <div className="topbar__right">
-          <Button variant="ghost" small onClick={() => setShowLeaderboard(true)}>
-            Leaderboard
-          </Button>
           <Button variant="ghost" small onClick={() => void list.refresh()}>
             Refresh
           </Button>
