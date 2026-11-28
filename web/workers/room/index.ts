@@ -45,6 +45,9 @@
  *   POST /api/quickplay/private/:code/join -> redeem an invite code, opens the match room
  *   POST /api/tts                         -> MP3 of { text }, for voice mode read-aloud
  *   GET  /api/quickplay/matches/:id        -> a Quick Play match's state (participants only)
+ *   POST /api/stats/attempts              -> upload AttemptEvents for per-category stats (signed-in only)
+ *   GET  /api/tags?ids=1,2,3               -> earned category tags for those users (public)
+ *   GET  /api/profile/:userId              -> public profile: nickname, rank, tags, category stats, recent activity
  *
  * A room code maps to a Durable Object by name, so every client using the same
  * code reaches the same instance no matter which edge location they hit.
@@ -60,6 +63,9 @@ import { d1RatingStore, handleAdminSetElo, handleRatings } from './ratings';
 import { d1BracketStore, handleBrackets, type MatchRoomOpener } from './brackets';
 import { d1QuickPlayStore, handleQuickPlay, type QuickPlayRoomOpener } from './quickplay';
 import { handleTts, type TtsAi } from './tts';
+import { d1ProfileStore, handleProfiles } from './profile';
+import { USER_ID_HEADER } from './room';
+import { requireUser } from './auth';
 
 export { Room };
 
@@ -269,6 +275,22 @@ export default {
       if (response) return response;
     }
 
+    // Per-category stats, category tags and public profiles.
+    if (
+      url.pathname.startsWith('/api/stats/') ||
+      url.pathname === '/api/tags' ||
+      url.pathname.startsWith('/api/profile/')
+    ) {
+      const response = await handleProfiles(
+        request,
+        d1Store(env.DB),
+        d1RatingStore(env.DB),
+        d1ProfileStore(env.DB),
+        contextFrom(request),
+      );
+      if (response) return response;
+    }
+
     // Quick Play: public matchmaking (rated) + private invite-code games
     // (unrated). Reuses the auth store for session resolution and the same
     // Room DO as H2H bracket matches.
@@ -303,7 +325,16 @@ export default {
       // Pass the code through so a cold object can name itself.
       const forwarded = new URL(request.url);
       forwarded.searchParams.set('code', code);
-      return stub.fetch(new Request(forwarded.toString(), request));
+      const fwd = new Request(forwarded.toString(), request);
+      // Tell the room who this socket belongs to, so it can show the player's
+      // tags and link their profile. Any client-sent copy is dropped first;
+      // only a session the Worker itself resolved sets it.
+      fwd.headers.delete(USER_ID_HEADER);
+      if (match[2] === 'ws') {
+        const me = await requireUser(request, d1Store(env.DB), Date.now()).catch(() => null);
+        if (me) fwd.headers.set(USER_ID_HEADER, String(me.id));
+      }
+      return stub.fetch(fwd);
     }
 
     return json({ error: 'not found' }, 404);

@@ -1,0 +1,50 @@
+/* Category tag chips + profile links. Theme tokens only, so every theme works. */
+
+.tag-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+.tag-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.tag-chip--top {
+  border-color: color-mix(in srgb, var(--gold, #d4af37) 70%, var(--line));
+  background: color-mix(in srgb, var(--gold, #d4af37) 22%, transparent);
+}
+
+.tag-chip--meta {
+  border-style: dashed;
+}
+
+.tag-chip--more {
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.player-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted color-mix(in srgb, var(--ink-soft) 70%, transparent);
+  cursor: pointer;
+}
+
+.player-link:hover,
+.player-link:focus-visible {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}

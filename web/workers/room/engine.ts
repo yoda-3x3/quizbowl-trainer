@@ -33,6 +33,8 @@ export interface PlayerRecord {
   connected: boolean;
   /** Set only in a room attached to a bracket match. */
   side?: Side;
+  /** Account id, when the player's socket carried a valid session (see room.ts). */
+  userId?: number;
 }
 
 /**
@@ -182,6 +184,7 @@ function playerViews(s: RoomState): PlayerView[] {
       connected: p.connected,
       lockedOut: s.lockedOut.includes(p.id),
       ...(p.side ? { side: p.side } : {}),
+      ...(p.userId ? { userId: p.userId } : {}),
     }))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }
@@ -222,12 +225,14 @@ export function join(
   name: string,
   now: number,
   side?: Side,
+  userId?: number,
 ): Outcome {
   const existing = s.players[playerId];
   if (existing) {
     existing.connected = true;
     existing.name = name || existing.name;
     if (side) existing.side = side;
+    if (userId) existing.userId = userId;
   } else {
     s.players[playerId] = {
       id: playerId,
@@ -235,6 +240,7 @@ export function join(
       score: 0,
       connected: true,
       ...(side ? { side } : {}),
+      ...(userId ? { userId } : {}),
     };
   }
   return { messages: [{ t: 'state', snapshot: snapshot(s, now) }] };

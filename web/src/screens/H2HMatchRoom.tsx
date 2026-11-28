@@ -12,6 +12,8 @@ import { Button, Sheet, TextInput } from '../ui';
 import { useAuth } from '../auth';
 import { useRoom } from '../room/useRoom';
 import type { Side } from '../../workers/room/protocol';
+import { PlayerName, TagChips } from '../TagChips';
+import { useTags } from '../profile';
 import './Rooms.css';
 import './Tournaments.css';
 
@@ -233,10 +235,11 @@ function SidePlayers({
   buzzer,
 }: {
   label: string;
-  players: Array<{ id: string; name: string; connected: boolean; lockedOut: boolean }>;
+  players: Array<{ id: string; name: string; connected: boolean; lockedOut: boolean; userId?: number }>;
   score: number;
   buzzer?: string | null;
 }) {
+  const tags = useTags(players.map((p) => p.userId));
   return (
     <div className="h2h__side">
       <div className="h2h__side-label">
@@ -254,7 +257,8 @@ function SidePlayers({
               .filter(Boolean)
               .join(' ')}
           >
-            <span>{p.name}</span>
+            <PlayerName name={p.name} userId={p.userId} />
+            <TagChips tags={p.userId ? tags[p.userId] : undefined} max={2} />
             {p.lockedOut ? <span className="player-chip__out">out</span> : null}
           </span>
         ))}
