@@ -42,6 +42,17 @@ export interface RatingStore {
   upsertRating(row: RatingRow): Promise<void>;
   /** Top N by ELO descending, for the leaderboard and the God check. */
   listTop(limit: number): Promise<RatingRow[]>;
+  /**
+   * Every non-banned player, rated or not, ELO descending. Players with no
+   * ratings row come back at ELO_START with `rated: false`. Optional so
+   * in-memory test stores that only need the top list don't have to grow it.
+   */
+  listAllPlayers?(limit: number): Promise<PlayerRatingRow[]>;
+}
+
+export interface PlayerRatingRow extends RatingRow {
+  username: string;
+  rated: boolean;
 }
 
 function num(v: unknown): number {
@@ -100,6 +111,30 @@ export function d1RatingStore(db: D1Database): RatingStore {
         .all<Record<string, unknown>>();
       const rows = res.results ?? [];
       return rows.map(rowToRating);
+    },
+
+    async listAllPlayers(limit) {
+      const res = await db
+        .prepare(
+          `SELECT u.id AS user_id, u.username AS username,
+                  COALESCE(r.elo, ?) AS elo,
+                  COALESCE(r.wins, 0) AS wins,
+                  COALESCE(r.losses, 0) AS losses,
+                  COALESCE(r.updated_at, u.created_at) AS updated_at,
+                  (r.user_id IS NOT NULL) AS rated
+             FROM users u
+             LEFT JOIN player_ratings r ON r.user_id = u.id
+            WHERE u.banned_at IS NULL
+            ORDER BY elo DESC, u.id ASC
+            LIMIT ?`,
+        )
+        .bind(ELO_START, limit)
+        .all<Record<string, unknown>>();
+      return (res.results ?? []).map((row) => ({
+        ...rowToRating(row),
+        username: String(row.username ?? ''),
+        rated: num(row.rated) === 1,
+      }));
     },
   };
 }
@@ -354,6 +389,8 @@ export async function handleAdminSetElo(
 
 export const LEADERBOARD_LIMIT_DEFAULT = 50;
 export const LEADERBOARD_LIMIT_MAX = 200;
+/** `?all=1` lists every player, so it gets a much higher ceiling. */
+export const LEADERBOARD_ALL_MAX = 2000;
 
 async function handleLeaderboard(
   request: Request,
@@ -362,6 +399,37 @@ async function handleLeaderboard(
 ): Promise<Response> {
   const url = new URL(request.url);
   const rawLimit = Number(url.searchParams.get('limit'));
+  const all = url.searchParams.get('all') === '1';
+  if (all && store.listAllPlayers) {
+    const limit =
+      Number.isInteger(rawLimit) && rawLimit > 0
+        ? Math.min(rawLimit, LEADERBOARD_ALL_MAX)
+        : LEADERBOARD_ALL_MAX;
+    // God stays positional on the *rated* board: an unrated newcomer at the
+    // start ELO can never take the #1 crown just by signing up.
+    const [top] = await store.listTop(1);
+    const players = await store.listAllPlayers(limit);
+    return json({
+      leaderboard: players.map((p, i) => {
+        const info = toRankInfo(p.elo, top !== undefined && top.userId === p.userId);
+        return {
+          user_id: p.userId,
+          username: p.username,
+          elo: p.elo,
+          wins: p.wins,
+          losses: p.losses,
+          rated: p.rated,
+          position: i + 1,
+          rank: {
+            tier: info.tier,
+            subrank: info.subrank,
+            label: info.label,
+            is_god: info.isGod,
+          },
+        };
+      }),
+    });
+  }
   const limit =
     Number.isInteger(rawLimit) && rawLimit > 0
       ? Math.min(rawLimit, LEADERBOARD_LIMIT_MAX)

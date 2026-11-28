@@ -1,0 +1,176 @@
+/* ELO chart (EloChart.tsx). Recessive bands and axis, thin neutral dots;
+   only God and "you" are called out, each with a label as well as colour. */
+
+.elo-chart {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.elo-chart svg {
+  display: block;
+}
+
+.elo-chart__band {
+  opacity: 0.1;
+}
+
+.elo-chart__band-label {
+  fill: var(--ink-soft);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-anchor: middle;
+}
+
+.elo-chart__axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.elo-chart__tick {
+  fill: var(--ink-soft);
+  font-size: 10px;
+  text-anchor: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.elo-chart__hit {
+  fill: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.elo-chart__dot {
+  fill: var(--ink-soft);
+  /* 2px surface ring so overlapping neighbours stay separable. */
+  stroke: var(--panel);
+  stroke-width: 2;
+  pointer-events: none;
+  transition: fill var(--dur-fast) ease-out;
+}
+
+.elo-chart__dot--unrated {
+  fill: transparent;
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+}
+
+.elo-chart__dot--hover,
+.elo-chart__hit:focus-visible + .elo-chart__dot {
+  fill: var(--ink);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.elo-chart__dot--me {
+  fill: var(--accent);
+}
+
+.elo-chart__dot--god {
+  fill: #e9c95c;
+  filter: drop-shadow(0 0 4px rgba(255, 220, 140, 0.8));
+}
+
+.elo-chart__callout {
+  font-size: 11px;
+  font-weight: 600;
+  text-anchor: middle;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+}
+
+.elo-chart__callout--god {
+  fill: #f3dc94;
+}
+
+.elo-chart__callout--me {
+  fill: var(--accent);
+}
+
+.elo-chart__tip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  box-shadow: var(--shadow-raised, 0 4px 16px rgba(0, 0, 0, 0.4));
+  color: var(--ink);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.elo-chart__tip-elo {
+  font-variant-numeric: tabular-nums;
+}
+
+.elo-chart__tip-rank {
+  color: var(--ink-soft);
+}
+
+.elo-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 6px 0 0;
+}
+
+.elo-chart__key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: 6px;
+}
+
+.elo-chart__key:first-child {
+  margin-left: 0;
+}
+
+.elo-chart__key--player {
+  background: var(--ink-soft);
+}
+
+.elo-chart__key--unrated {
+  border: 1.5px solid var(--ink-soft);
+}
+
+.elo-chart__key--god {
+  background: #e9c95c;
+}
+
+.elo-chart__key--me {
+  background: var(--accent);
+}
+
+/* Leaderboard rows for players with no rated match yet. */
+.leaderboard__unrated {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.leaderboard__count {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elo-chart__dot {
+    transition: none;
+  }
+}
+
+/* Your own row on the leaderboard. */
+.leaderboard__row--me {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-radius: 8px;
+}
