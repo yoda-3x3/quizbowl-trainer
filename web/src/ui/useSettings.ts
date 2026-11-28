@@ -82,6 +82,9 @@ export interface Settings {
   voiceRead: boolean;
   /** Voice mode: listen for a spoken answer after a buzz. */
   voiceAnswer: boolean;
+  /** Show the backdrop your rank has unlocked instead of the theme's
+   *  painting. The theme's palette and fonts stay either way. */
+  rankBackdrop: boolean;
 }
 
 export const WPM_RANGE = { min: 60, max: 300 } as const;
@@ -98,6 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'classic',
   voiceRead: false,
   voiceAnswer: false,
+  rankBackdrop: true,
 };
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -165,6 +169,7 @@ export function normalizeSettings(raw: unknown): Settings {
     theme: isTheme(r.theme) ? r.theme : DEFAULT_SETTINGS.theme,
     voiceRead: r.voiceRead === true,
     voiceAnswer: r.voiceAnswer === true,
+    rankBackdrop: r.rankBackdrop !== false,
   };
 }
 

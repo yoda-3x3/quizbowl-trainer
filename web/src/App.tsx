@@ -35,6 +35,8 @@ import { useShortcuts } from './shortcuts';
 import { directionBetween, flipPage } from './ui/pageFlip';
 import { useAuth } from './auth';
 import ThemeBackdrop from './ThemeBackdrop';
+import RankBadge from './RankBadge';
+import { useMyRank } from './myRank';
 import Profile from './screens/Profile';
 import { closeProfile, useProfileRoute, useStatsSync } from './profile';
 
@@ -57,6 +59,7 @@ export default function App() {
   const auth = useAuth();
   const [settings] = useSettings();
   const theme = settings.theme;
+  const myRank = useMyRank();
   // A profile (#/u/<id>) overlays whichever tab is open; the tab stays
   // mounted underneath so a live room survives a look at someone's profile.
   const profileId = useProfileRoute();
@@ -124,8 +127,11 @@ export default function App() {
   }
 
   return (
-    <div className="app" data-theme={theme}>
-      <ThemeBackdrop theme={theme} />
+    <div className="app" data-theme={theme} data-ranked={myRank ? '' : undefined}>
+      <ThemeBackdrop
+        theme={theme}
+        rank={myRank && settings.rankBackdrop ? myRank.rank : null}
+      />
       {/* `key={tab}` remounts this wrapper on every tab switch, which is
           what makes the entrance animation below replay each time — without
           it, React would just patch the existing DOM and no transition would
@@ -178,6 +184,11 @@ export default function App() {
           setTab(t);
         }}
       />
+      {myRank ? (
+        <div className="topbar-rank" data-testid="topbar-rank">
+          <RankBadge rating={myRank} variant="topbar" />
+        </div>
+      ) : null}
       <div
         className="pre-alpha-badge"
         aria-label="This build is pre-alpha"

@@ -41,7 +41,8 @@ import {
 } from '../ui';
 import { THEME_VISUALS } from '../ThemeBackdrop';
 import { useAuth } from '../auth';
-import { useMyRating } from '../rank';
+import { useMyRating, type RatingPublic } from '../rank';
+import { visualForRank } from '../rankVisuals';
 import RankBadge from '../RankBadge';
 import { openProfile } from '../profile';
 import SignIn from './SignIn';
@@ -306,6 +307,11 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
             value={settings.theme}
             onPick={(theme) => set({ theme })}
           />
+          <RankBackdropToggle
+            on={settings.rankBackdrop}
+            rating={myRating.rating}
+            onToggle={() => set({ rankBackdrop: !settings.rankBackdrop })}
+          />
         </Sheet>
 
         <Sheet title="Data">
@@ -491,6 +497,35 @@ function ThemePicker({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Opt-out for the rank backdrop. Signed-in players see the backdrop their
+ * tier has unlocked (with the theme's own palette and fonts still applied);
+ * turning it off brings the theme's painting back.
+ */
+function RankBackdropToggle({
+  on,
+  rating,
+  onToggle,
+}: {
+  on: boolean;
+  rating: RatingPublic | null;
+  onToggle(): void;
+}) {
+  const visual = rating ? visualForRank(rating.rank) : null;
+  return (
+    <div className="rank-backdrop-toggle">
+      <ChipRow>
+        <Chip label="Rank backdrop" pressed={on} onToggle={onToggle} />
+      </ChipRow>
+      <p className="tiny muted">
+        {visual
+          ? `${visual.tier} unlocks: ${visual.backdrop.credit ?? 'a quiet ' + visual.tier.toLowerCase() + ' wash'}. Climb the ranks to unlock richer backdrops and loading screens.`
+          : 'Sign in and play rated matches to unlock a backdrop for your rank.'}
+      </p>
     </div>
   );
 }

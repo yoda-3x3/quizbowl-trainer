@@ -57,6 +57,6 @@ describe('TournamentDetail', () => {
       createElement(TournamentDetail, { id: 99, onExit: () => {} }),
     );
     expect(html).toContain('Tournament');
-    expect(html).toContain('loading');
+    expect(html).toMatch(/loading/i);
   });
 });

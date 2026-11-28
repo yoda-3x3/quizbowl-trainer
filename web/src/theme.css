@@ -1,4 +1,5 @@
 @import './themes.css';
+@import './rank.css';
 
 /* Base palette: black + beige, for a system in dark mode (and the default
    when the OS doesn't report a preference at all). A `prefers-color-scheme:
@@ -1171,29 +1172,14 @@ input {
   transition: width var(--dur-fast, 160ms) var(--ease-standard, ease);
 }
 
-/* God: the #1 spot. A slow gold pulse instead of the plain tier gradient, so
-   it reads as a distinct event rather than just "King, but brighter". */
+/* God: the #1 spot. The gold crest and card wash live here; the light
+   itself (rays, halo, breathing glow) comes from the aura in rank.css. */
 .rank-badge--god.rank-badge--card {
   background: linear-gradient(135deg, #3a330f 0%, #1a1d22 75%);
-  animation: rank-god-pulse 2.6s ease-in-out infinite;
 }
 
 .rank-badge--god .rank-badge__crest {
   background: radial-gradient(circle at 35% 30%, #fff8dd 0%, #d4af37 60%, #8a6d1a 100%);
-}
-
-.rank-badge--god.rank-badge--compact {
-  animation: rank-god-pulse 2.6s ease-in-out infinite;
-}
-
-@keyframes rank-god-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 1px color-mix(in srgb, #d4af37 50%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 14px 2px color-mix(in srgb, #d4af37 65%, transparent);
-  }
 }
 
 /* Voice mode: listening / heard / missed line under an answer box. */

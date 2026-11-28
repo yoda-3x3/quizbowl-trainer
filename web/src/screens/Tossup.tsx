@@ -7,6 +7,7 @@
  * drift against the room server, which shares `pacing.ts`.
  */
 
+import RankLoader from '../RankLoader';
 import {
   useCallback,
   useEffect,
@@ -517,7 +518,9 @@ export default function Tossup({ onExit, onProtest, source, title = 'Tossups' }:
           </p>
         ) : null}
 
-        {hideQuestion ? (
+        {loading && !current ? (
+          <RankLoader label="Loading questions" />
+        ) : hideQuestion ? (
           <p className="read read--card muted" ref={readCardRef}>
             <em>Question hidden. Press K to show it again.</em>
           </p>

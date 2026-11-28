@@ -23,6 +23,8 @@ import {
   type QuickPlayMatchPublic,
 } from '../quickplay';
 import H2HMatchRoom from './H2HMatchRoom';
+import RankBadge from '../RankBadge';
+import { useMyRank } from '../myRank';
 import type { Side } from '../../workers/room/protocol';
 import './Tournaments.css';
 import './Rooms.css';
@@ -40,6 +42,7 @@ export default function QuickPlay({ onExit }: { onExit(): void }) {
   const [mode, setMode] = useState<Mode>({ kind: 'menu' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const myRank = useMyRank();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = () => {
@@ -146,6 +149,11 @@ export default function QuickPlay({ onExit }: { onExit(): void }) {
         {mode.kind === 'menu' ? (
           <>
             <Sheet title="Find a match">
+              {myRank ? (
+                <div className="quickplay__rank">
+                  <RankBadge rating={myRank} />
+                </div>
+              ) : null}
               <p className="tiny muted">
                 Regulation 20 tossups against the next person who also wants a match. Rated — wins
                 and losses move your ELO.

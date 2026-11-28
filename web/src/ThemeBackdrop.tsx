@@ -18,6 +18,8 @@
 
 import { useEffect } from 'react';
 import type { ThemeId } from './ui/useSettings';
+import type { RankPublic } from './rank';
+import { backdropBackground, visualForRank } from './rankVisuals';
 
 interface ThemeVisual {
   /** Relative to /public: resolves to /themes/<name>.jpg at runtime. */
@@ -75,6 +77,10 @@ export const THEME_VISUALS: Record<Exclude<ThemeId, 'classic'>, ThemeVisual> = {
 
 export interface ThemeBackdropProps {
   theme: ThemeId;
+  /** The signed-in player's rank. When set, the backdrop their tier has
+   *  unlocked replaces the theme painting; the theme's palette, fonts and
+   *  --bg-keyed scrim still apply, so every colour theme keeps working. */
+  rank?: Pick<RankPublic, 'tier' | 'is_god'> | null;
 }
 
 /**
@@ -85,7 +91,7 @@ export interface ThemeBackdropProps {
  * off the critical path for `classic` users and off every theme they did
  * not pick.
  */
-export default function ThemeBackdrop({ theme }: ThemeBackdropProps) {
+export default function ThemeBackdrop({ theme, rank = null }: ThemeBackdropProps) {
   const visual = theme === 'classic' ? null : THEME_VISUALS[theme];
 
   useEffect(() => {
@@ -99,6 +105,8 @@ export default function ThemeBackdrop({ theme }: ThemeBackdropProps) {
       link.remove();
     };
   }, [visual, theme]);
+
+  if (rank) return <RankBackdrop rank={rank} />;
 
   if (!visual) return null;
 
@@ -118,5 +126,44 @@ export default function ThemeBackdrop({ theme }: ThemeBackdropProps) {
         backgroundRepeat: 'no-repeat, no-repeat',
       }}
     />
+  );
+}
+
+/**
+ * The backdrop a tier unlocks. Serf..Squire are CSS-only washes over the
+ * theme's own --bg; Knight and up lay a public-domain painting (or a Hubble
+ * plate for King) under a scrim mixed from --bg. Duke and up drift slowly;
+ * God adds a pulsing glow between the two hands. Motion is CSS-only and
+ * switched off under prefers-reduced-motion (see rank.css).
+ */
+function RankBackdrop({ rank }: { rank: Pick<RankPublic, 'tier' | 'is_god'> }) {
+  const v = visualForRank(rank);
+  return (
+    <div
+      className="theme-backdrop rank-backdrop"
+      aria-hidden="true"
+      data-rank-backdrop={v.tier}
+      data-drift={v.level >= 5 ? '' : undefined}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: -1,
+        pointerEvents: 'none',
+        background: 'var(--bg)',
+      }}
+    >
+      <div
+        className="rank-backdrop__layer"
+        style={{
+          backgroundImage: backdropBackground(v),
+          backgroundSize: v.backdrop.image ? 'cover, cover, cover' : 'cover, cover',
+          backgroundPosition: v.backdrop.image
+            ? `center, center, ${v.backdrop.position}`
+            : 'center, center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
+      {v.tier === 'God' ? <div className="rank-backdrop__spark" /> : null}
+    </div>
   );
 }

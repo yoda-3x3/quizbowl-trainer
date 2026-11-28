@@ -11,6 +11,8 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import { Button, Sheet, TextInput } from '../ui';
 import { useAuth } from '../auth';
 import { useRoom } from '../room/useRoom';
+import { rankForName, useRanksByName } from '../myRank';
+import RankBadge from '../RankBadge';
 import type { Side } from '../../workers/room/protocol';
 import { PlayerName, TagChips } from '../TagChips';
 import { useTags } from '../profile';
@@ -239,6 +241,9 @@ function SidePlayers({
   score: number;
   buzzer?: string | null;
 }) {
+  // Room players only carry a display name, so ranks come from the cached
+  // leaderboard by username; unrated players just show no badge.
+  const ranks = useRanksByName(players.map((p) => p.name));
   const tags = useTags(players.map((p) => p.userId));
   return (
     <div className="h2h__side">
@@ -257,6 +262,10 @@ function SidePlayers({
               .filter(Boolean)
               .join(' ')}
           >
+            {(() => {
+              const r = rankForName(ranks, p.name);
+              return r ? <RankBadge rating={r} variant="mini" /> : null;
+            })()}
             <PlayerName name={p.name} userId={p.userId} />
             <TagChips tags={p.userId ? tags[p.userId] : undefined} max={2} />
             {p.lockedOut ? <span className="player-chip__out">out</span> : null}

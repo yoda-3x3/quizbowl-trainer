@@ -10,6 +10,7 @@
  * and the scoreboard refreshes.
  */
 
+import RankLoader from '../RankLoader';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Field, Sheet, TextInput, filtersFrom, useSettings } from '../ui';
 import { useAuth } from '../auth';
@@ -52,7 +53,7 @@ export default function TournamentDetail({ id, onExit }: TournamentDetailProps) 
   if (handle.loading && !tournament) {
     return (
       <Screen title="Tournament" onExit={onExit}>
-        <p className="tiny muted">loading</p>
+        <RankLoader label="Loading tournament" />
       </Screen>
     );
   }
