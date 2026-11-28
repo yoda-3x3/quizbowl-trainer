@@ -10,10 +10,7 @@
 
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import {
-  CATEGORIES,
   DIFFICULTY_LABELS,
-  SUBCATEGORIES,
-  type Category,
 } from '../types';
 import { STRICTNESS_RANGE } from '../engine/judge';
 import { clear as clearLog, isEphemeral } from '../engine/log';
@@ -25,9 +22,7 @@ import {
 } from '../data/cache';
 import {
   Button,
-  Chip,
-  ChipRow,
-  Field,
+  CategoryPicker,
   Sheet,
   SliderField,
   POST_BUZZ_RANGE,
@@ -35,7 +30,6 @@ import {
   WPM_RANGE,
   resetSettings,
   settingsArePersisted,
-  subcategoriesFor,
   useSettings,
   type ThemeId,
 } from '../ui';
@@ -66,30 +60,6 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
   useEffect(() => {
     void cacheCounts().then(setCounts);
   }, []);
-
-  const toggleCategory = (c: Category) => {
-    const next = settings.categories.includes(c)
-      ? settings.categories.filter((x) => x !== c)
-      : [...settings.categories, c];
-    // Dropping a category must drop its subcategories, or the filter would ask
-    // for a subcategory outside every selected category and return nothing.
-    const allowed = subcategoriesFor(next);
-    set({
-      categories: next,
-      subcategories: settings.subcategories.filter((s) => allowed.includes(s)),
-    });
-  };
-
-  const toggleSubcategory = (s: string) => {
-    set({
-      subcategories: settings.subcategories.includes(s)
-        ? settings.subcategories.filter((x) => x !== s)
-        : [...settings.subcategories, s],
-    });
-  };
-
-  const visibleCategories: readonly Category[] =
-    settings.categories.length > 0 ? settings.categories : CATEGORIES;
 
   const strictnessWord =
     settings.strictness <= 2
@@ -221,64 +191,13 @@ export default function Settings({ onOpenAdmin }: SettingsProps) {
           />
         </Sheet>
 
-        <Sheet
-          title="Categories"
-          aside={
-            settings.categories.length > 0 ? (
-              <Button
-                variant="ghost"
-                small
-                onClick={() => set({ categories: [], subcategories: [] })}
-              >
-                Clear
-              </Button>
-            ) : (
-              <span className="tiny muted">all</span>
-            )
-          }
-        >
-          <ChipRow>
-            {CATEGORIES.map((c) => (
-              <Chip
-                key={c}
-                label={c}
-                pressed={settings.categories.includes(c)}
-                onToggle={() => toggleCategory(c)}
-              />
-            ))}
-          </ChipRow>
-        </Sheet>
-
-        <Sheet
-          title="Subcategories"
-          aside={
-            settings.subcategories.length > 0 ? (
-              <Button
-                variant="ghost"
-                small
-                onClick={() => set({ subcategories: [] })}
-              >
-                Clear
-              </Button>
-            ) : (
-              <span className="tiny muted">all</span>
-            )
-          }
-        >
-          {visibleCategories.map((c) => (
-            <Field key={c} label={c}>
-              <ChipRow>
-                {SUBCATEGORIES[c].map((s) => (
-                  <Chip
-                    key={s}
-                    label={s}
-                    pressed={settings.subcategories.includes(s)}
-                    onToggle={() => toggleSubcategory(s)}
-                  />
-                ))}
-              </ChipRow>
-            </Field>
-          ))}
+        <Sheet title="Categories">
+          <CategoryPicker
+            value={settings}
+            onChange={({ categories, subcategories }) =>
+              set({ categories, subcategories })
+            }
+          />
         </Sheet>
 
         <Sheet title="Judging">

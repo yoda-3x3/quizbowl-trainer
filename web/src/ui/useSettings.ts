@@ -20,6 +20,7 @@ import {
   type QuestionFilters,
 } from '../types';
 import { DEFAULT_STRICTNESS } from '../engine/judge';
+import { canonicalSelection } from './categorySelection';
 
 const KEY = 'qbt.settings.v1';
 
@@ -131,16 +132,15 @@ export function normalizeSettings(raw: unknown): Settings {
   if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_SETTINGS };
   const r = raw as Partial<Record<keyof Settings, unknown>>;
 
-  const categories = Array.isArray(r.categories)
-    ? r.categories.filter(isCategory)
-    : [];
-
-  const allowed = subcategoriesFor(categories);
-  const subcategories = Array.isArray(r.subcategories)
-    ? r.subcategories.filter(
-        (s): s is string => typeof s === 'string' && allowed.includes(s),
-      )
-    : [];
+  // Canonical category/subcategory form (see categorySelection.ts): either
+  // no subcategories (all of the selected categories) or the complete wanted
+  // list, so the QB Reader query never drops a selected category.
+  const { categories, subcategories } = canonicalSelection({
+    categories: Array.isArray(r.categories) ? r.categories.filter(isCategory) : [],
+    subcategories: Array.isArray(r.subcategories)
+      ? r.subcategories.filter((s): s is string => typeof s === 'string')
+      : [],
+  });
 
   let min = clamp(Number(r.minDifficulty ?? DEFAULT_SETTINGS.minDifficulty), 0, 10);
   let max = clamp(Number(r.maxDifficulty ?? DEFAULT_SETTINGS.maxDifficulty), 0, 10);

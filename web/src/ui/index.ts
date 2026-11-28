@@ -6,6 +6,10 @@ export type { ButtonProps, ButtonVariant } from './Button';
 export { default as Field, TextInput, SliderField, Chip, ChipRow } from './Field';
 export type { FieldProps, SliderFieldProps, ChipProps } from './Field';
 
+export { default as CategoryPicker } from './CategoryPicker';
+export type { CategoryPickerProps } from './CategoryPicker';
+export * from './categorySelection';
+
 export { default as Sheet } from './Sheet';
 export type { SheetProps } from './Sheet';
 

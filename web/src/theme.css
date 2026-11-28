@@ -195,6 +195,11 @@ input {
 @media (min-width: 900px) {
   .practice-shell {
     display: grid;
+    /* The shell is a flex item of a column container; with auto margins it
+       would shrink to its content and widen as the question text fills in,
+       stretching the question box sideways mid-read. Pin it to full width. */
+    width: 100%;
+    box-sizing: border-box;
     grid-template-columns: minmax(0, 1fr) 300px;
     gap: 16px;
     max-width: 1400px;
@@ -700,18 +705,225 @@ input {
   overflow-wrap: break-word;
 }
 
-/* Bounded to a fraction of the viewport, not the revealed content — a long
-   tossup must not grow the card and push the Buzz button down mid-read.
-   Overflow scrolls instead, and Tossup.tsx keeps it scrolled to the latest
-   revealed word. */
+/* The question window is one fixed size for the whole question: empty,
+   reading, buzzed, resolved, hidden (K) and the voice placeholder all share
+   it. A fixed px height (not dvh, which changes as a phone's URL bar slides)
+   fits a long tossup (~10 lines at 820px wide); anything longer scrolls
+   inside, and Tossup.tsx keeps the newest word in view. `flex: none` stops
+   the column layout from squeezing it when banners appear below. */
 .read--card {
+  --read-card-h: 320px;
+  box-sizing: border-box;
+  flex: none;
+  height: var(--read-card-h);
+  min-height: var(--read-card-h);
+  max-height: var(--read-card-h);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px 16px 18px;
-  height: clamp(180px, 32dvh, 340px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   scroll-behavior: smooth;
+}
+
+/* QB Reader's "(#)": where the buzz landed, shown once the tossup resolves. */
+.read__buzz {
+  color: var(--accent);
+  font-weight: 700;
+  margin: 0 0.25em;
+}
+
+/* QB Reader-style stat line above the question. */
+.tossup-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  min-height: 18px;
+  white-space: nowrap;
+}
+
+.tossup-stats__line,
+.tossup-stats__filter {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tossup-stats__filter {
+  flex: 0 1 auto;
+  font-size: 11px;
+}
+
+/* Prompt / result slot under the status line. Holds space even when empty so
+   the controls do not jump when the result lands. */
+.tossup-outcome {
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.answerline__label {
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* --- category picker (practice sidebar + Settings) ---------------------- */
+
+.catpick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.catpick__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.catpick__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.catpick__all {
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.catpick__all:disabled {
+  color: var(--ink-soft);
+  cursor: default;
+}
+
+.catpick__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.catpick__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.catpick__line {
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.catpick__cat {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  padding: 6px 9px;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+
+.catpick__name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catpick__count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.catpick__box {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 3px;
+  position: relative;
+}
+
+.catpick__row--all .catpick__cat,
+.catpick__row--some .catpick__cat {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+.catpick__row--all .catpick__box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.catpick__row--some .catpick__box {
+  border-color: var(--accent);
+}
+
+.catpick__row--some .catpick__box::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--accent);
+}
+
+.catpick__caret {
+  flex: none;
+  width: 30px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.catpick__caret[aria-expanded='true'] {
+  color: var(--ink);
+}
+
+.catpick__subs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 0 6px 20px;
+}
+
+.catpick__sub {
+  padding: 5px 9px;
+  font-size: 11.5px;
 }
 
 .read__power {
@@ -827,10 +1039,26 @@ input {
 .meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   font-size: 11px;
   color: var(--ink-soft);
+}
+
+/* On the tossup screen the meta row sits right above the question box, so
+   it is held to one line of fixed height: loading text, a long set name or
+   the star button appearing must not nudge the box down. */
+.meta--fixed {
+  flex-wrap: nowrap;
+  height: 18px;
+  white-space: nowrap;
+}
+
+.meta--fixed > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .placeholder {
@@ -992,8 +1220,14 @@ input {
   }
 
   .read--card {
+    --read-card-h: 280px;
     padding: 13px 13px 15px;
-    height: clamp(150px, 30dvh, 280px);
+  }
+
+  /* The category summary lives in the sidebar/Settings; on a phone the stat
+     line needs the room. */
+  .tossup-stats__filter {
+    display: none;
   }
 
   .read {

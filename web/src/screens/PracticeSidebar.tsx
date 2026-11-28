@@ -2,7 +2,8 @@
  * Right-hand settings panel for the Tossup and Bonus screens at >=900px.
  *
  * Mirrors the subset of `Settings.tsx` that a player tweaks mid-practice: pace,
- * post-buzz clock, difficulty band, top-level categories, and judge strictness.
+ * post-buzz clock, difficulty band, categories + subcategories (the shared
+ * `CategoryPicker`, qbreader-style), and judge strictness.
  * Every control is a thin wrapper over the same shared primitives
  * (`SliderField`, `Chip`, `ChipRow`, `Button`) that Settings uses, and reads
  * from and writes to the same `useSettings` store — never its own copy. A
@@ -13,36 +14,19 @@
  * single-column layout at phone widths.
  */
 
-import { DIFFICULTY_LABELS, CATEGORIES, type Category } from '../types';
+import { DIFFICULTY_LABELS } from '../types';
 import { STRICTNESS_RANGE } from '../engine/judge';
 import {
-  Button,
-  Chip,
-  ChipRow,
+  CategoryPicker,
   POST_BUZZ_RANGE,
   SliderField,
   WPM_RANGE,
-  subcategoriesFor,
   useSettings,
 } from '../ui';
 import VoiceToggles from '../voice/VoiceToggles';
 
 export default function PracticeSidebar() {
   const [settings, set] = useSettings();
-
-  const toggleCategory = (c: Category) => {
-    const next = settings.categories.includes(c)
-      ? settings.categories.filter((x) => x !== c)
-      : [...settings.categories, c];
-    // Dropping a category must drop its subcategories, same guarantee Settings
-    // enforces: the filter would otherwise ask for a subcategory outside
-    // every selected category and return nothing.
-    const allowed = subcategoriesFor(next);
-    set({
-      categories: next,
-      subcategories: settings.subcategories.filter((s) => allowed.includes(s)),
-    });
-  };
 
   const strictnessWord =
     settings.strictness <= 2
@@ -101,32 +85,13 @@ export default function PracticeSidebar() {
         </section>
 
         <section className="practice-sidebar__section">
-          <div className="practice-sidebar__row">
-            <h2 className="practice-sidebar__title">Categories</h2>
-            {settings.categories.length > 0 ? (
-              <Button
-                variant="ghost"
-                small
-                onClick={() =>
-                  set({ categories: [], subcategories: [] })
-                }
-              >
-                Clear
-              </Button>
-            ) : (
-              <span className="tiny muted">all</span>
-            )}
-          </div>
-          <ChipRow>
-            {CATEGORIES.map((c) => (
-              <Chip
-                key={c}
-                label={c}
-                pressed={settings.categories.includes(c)}
-                onToggle={() => toggleCategory(c)}
-              />
-            ))}
-          </ChipRow>
+          <h2 className="practice-sidebar__title">Categories</h2>
+          <CategoryPicker
+            value={settings}
+            onChange={({ categories, subcategories }) =>
+              set({ categories, subcategories })
+            }
+          />
         </section>
 
         <section className="practice-sidebar__section">
