@@ -27,6 +27,9 @@ export interface RatingPublic {
 
 export interface LeaderboardEntry extends RatingPublic {
   position: number;
+  /** Only on `all` boards: false for a player with no rated match yet,
+   *  shown at the start ELO. */
+  rated?: boolean;
 }
 
 async function parseError(res: Response): Promise<string> {
@@ -71,9 +74,10 @@ export async function fetchRating(userId: number): Promise<RatingPublic> {
   return body.rating;
 }
 
-export async function fetchLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+/** `all` lists every non-banned player, unrated ones at the start ELO. */
+export async function fetchLeaderboard(limit = 50, all = false): Promise<LeaderboardEntry[]> {
   const body = await getJson<{ leaderboard: LeaderboardEntry[] }>(
-    `/api/leaderboard?limit=${limit}`,
+    `/api/leaderboard?limit=${limit}${all ? '&all=1' : ''}`,
   );
   return body.leaderboard ?? [];
 }
@@ -126,7 +130,7 @@ export interface LeaderboardHandle {
   refresh(): Promise<void>;
 }
 
-export function useLeaderboard(limit = 50): LeaderboardHandle {
+export function useLeaderboard(limit = 50, all = false): LeaderboardHandle {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -134,14 +138,14 @@ export function useLeaderboard(limit = 50): LeaderboardHandle {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setEntries(await fetchLeaderboard(limit));
+      setEntries(await fetchLeaderboard(limit, all));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to load');
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, [limit, all]);
 
   useEffect(() => {
     void refresh();

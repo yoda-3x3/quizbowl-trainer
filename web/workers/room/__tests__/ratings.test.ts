@@ -26,6 +26,7 @@ import {
   handleRatings,
   recordMatchResult,
   tierForElo,
+  type PlayerRatingRow,
   type RatingRow,
   type RatingStore,
 } from '../ratings';
@@ -315,6 +316,62 @@ describe('handleRatings', () => {
     expect(body.leaderboard[0]?.rank.is_god).toBe(true);
     expect(body.leaderboard[0]?.rank.label).toBe('God');
     expect(body.leaderboard[1]?.rank.is_god).toBe(false);
+  });
+
+  it('GET /api/leaderboard?all=1 lists every non-banned player, unrated at the start ELO', async () => {
+    const { authStore, ratingStore, aliceId, bobId } = await seed();
+    const carolId = await authStore.createUser('carol', 'x', 'user', NOW);
+    const bannedId = await authStore.createUser('mallory', 'x', 'user', NOW);
+    authStore.users.get(bannedId)!.bannedAt = NOW;
+    // Bob loses one match, so he drops below carol's untouched start ELO.
+    await recordMatchResult(ratingStore, aliceId, bobId, NOW);
+    const store: RatingStore = Object.assign(ratingStore, {
+      async listAllPlayers(limit: number): Promise<PlayerRatingRow[]> {
+        return [...authStore.users.values()]
+          .filter((u) => u.bannedAt === null)
+          .map((u) => {
+            const r = ratingStore.rows.get(u.id);
+            return {
+              userId: u.id,
+              username: u.username,
+              elo: r?.elo ?? ELO_START,
+              wins: r?.wins ?? 0,
+              losses: r?.losses ?? 0,
+              updatedAt: r?.updatedAt ?? u.createdAt,
+              rated: r !== undefined,
+            };
+          })
+          .sort((a, b) => b.elo - a.elo || a.userId - b.userId)
+          .slice(0, limit);
+      },
+    });
+
+    const res = await handleRatings(req('GET', '/api/leaderboard?all=1'), authStore, store, ctx());
+    const body = (await res?.json()) as {
+      leaderboard: Array<{ user_id: number; position: number; rated: boolean; elo: number; rank: { is_god: boolean } }>;
+    };
+    expect(body.leaderboard.map((e) => e.user_id)).toEqual([aliceId, carolId, bobId]);
+    expect(body.leaderboard.map((e) => e.position)).toEqual([1, 2, 3]);
+    expect(body.leaderboard[1]).toMatchObject({ rated: false, elo: ELO_START });
+    expect(body.leaderboard[0]?.rank.is_god).toBe(true);
+    expect(body.leaderboard.filter((e) => e.rank.is_god)).toHaveLength(1);
+  });
+
+  it('an unrated newcomer never takes the God crown', async () => {
+    const { authStore, ratingStore, aliceId } = await seed();
+    await ratingStore.upsertRating({ userId: aliceId, elo: 150, wins: 0, losses: 3, updatedAt: NOW });
+    const store: RatingStore = Object.assign(ratingStore, {
+      async listAllPlayers(): Promise<PlayerRatingRow[]> {
+        return [
+          { userId: 99, username: 'newbie', elo: ELO_START, wins: 0, losses: 0, updatedAt: NOW, rated: false },
+          { userId: aliceId, username: 'alice', elo: 150, wins: 0, losses: 3, updatedAt: NOW, rated: true },
+        ];
+      },
+    });
+    const res = await handleRatings(req('GET', '/api/leaderboard?all=1'), authStore, store, ctx());
+    const body = (await res?.json()) as { leaderboard: Array<{ user_id: number; rank: { is_god: boolean } }> };
+    expect(body.leaderboard[0]?.rank.is_god).toBe(false);
+    expect(body.leaderboard[1]?.rank.is_god).toBe(true);
   });
 
   it('returns null for unrelated paths', async () => {
