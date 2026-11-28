@@ -38,6 +38,7 @@ import type { AttemptEvent, Bonus as BonusQuestion, Directive } from '../types';
 import { rateForWpm, spokenAnswer, stopSpeaking } from '../voice/speech';
 import {
   VoiceAnswerStatus,
+  VoiceHiddenText,
   useReadAloud,
   useVoiceAnswer,
   useVoiceSettings,
@@ -356,7 +357,11 @@ export default function Bonus({ onExit, source }: BonusProps) {
 
         {current && plan ? (
           <Sheet className={allCorrect ? 'bonus-sweep' : undefined}>
-            <p className="read">{current.leadinSanitized}</p>
+            {voice.read && results.length === 0 ? (
+              <VoiceHiddenText className="read" what="bonus" />
+            ) : (
+              <p className="read">{current.leadinSanitized}</p>
+            )}
 
             {plan.truncated ? (
               <p className="banner banner--warn">
@@ -384,7 +389,12 @@ export default function Bonus({ onExit, source }: BonusProps) {
                         : `${part.value} points`}
                     </span>
                   </div>
-                  <p className="read">{part.prompt}</p>
+                  {voice.read && !res ? (
+                    // Part 1 is read with the lead-in, whose placeholder covers both.
+                    i === 0 ? null : <VoiceHiddenText className="read" what="part" />
+                  ) : (
+                    <p className="read">{part.prompt}</p>
+                  )}
 
                   {res ? (
                     <div

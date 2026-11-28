@@ -23,7 +23,12 @@ import {
 } from 'react';
 import type { OacPacket, OacTeam } from '../types';
 import { rateForWpm, speak, spokenAnswer, stopSpeaking } from '../voice/speech';
-import { VoiceAnswerStatus, useVoiceAnswer, useVoiceSettings } from '../voice/useVoice';
+import {
+  VoiceAnswerStatus,
+  VoiceHiddenText,
+  useVoiceAnswer,
+  useVoiceSettings,
+} from '../voice/useVoice';
 import { OAC_SCORING } from '../types';
 import { append } from '../engine/log';
 import {
@@ -397,7 +402,11 @@ function Directed({
         <span style={S.badge}>no buzzing</span>
       </div>
 
-      <p style={S.question}>{d.question.prompt}</p>
+      {voice.read && d.phase !== 'done' ? (
+        <VoiceHiddenText className="" style={S.question} />
+      ) : (
+        <p style={S.question}>{d.question.prompt}</p>
+      )}
 
       {d.phase === 'ready' ? (
         <button style={S.btnPrimary} onClick={() => dispatch({ type: 'start' })}>
@@ -502,10 +511,14 @@ function TossupPanel({
         <span style={S.badge}>one answer each</span>
       </div>
 
-      <p style={S.question}>
-        {t.words.slice(0, revealed).join(' ')}
-        {revealed < t.words.length ? <span style={S.caret} /> : null}
-      </p>
+      {voice.read && t.phase !== 'done' ? (
+        <VoiceHiddenText className="" style={S.question} />
+      ) : (
+        <p style={S.question}>
+          {t.words.slice(0, revealed).join(' ')}
+          {revealed < t.words.length ? <span style={S.caret} /> : null}
+        </p>
+      )}
 
       {t.phase === 'ready' ? (
         <button style={S.btnPrimary} onClick={() => dispatch({ type: 'start' })}>

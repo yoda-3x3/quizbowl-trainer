@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useSettings } from '../ui';
 import { canListen, canSpeak, listen, speak } from './speech';
 
@@ -95,6 +95,35 @@ export function useVoiceAnswer(
 
   const restart = useCallback(() => setNonce((n) => n + 1), []);
   return { state, heard, reason, restart };
+}
+
+/**
+ * Stands in for question text while it is being read aloud. With read-aloud
+ * on, the player plays by ear like at a real match: the text only appears
+ * once the question is over.
+ */
+export function VoiceHiddenText({
+  className = 'read read--card',
+  style,
+  what = 'question',
+}: {
+  className?: string;
+  style?: CSSProperties;
+  what?: string;
+}) {
+  return (
+    <p className={`${className} voice-hidden`} style={style} aria-live="polite">
+      <span className="voice-hidden__wave" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="voice-hidden__label">
+        Listen — the {what} is being read aloud. The text appears once it's resolved.
+      </span>
+    </p>
+  );
 }
 
 function missedText(reason: string | null): string {

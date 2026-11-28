@@ -43,6 +43,7 @@
  *   GET  /api/quickplay/queue/status       -> whether the caller is still queued
  *   POST /api/quickplay/private            -> create a private (unrated) game, returns an invite code
  *   POST /api/quickplay/private/:code/join -> redeem an invite code, opens the match room
+ *   POST /api/tts                         -> MP3 of { text }, for voice mode read-aloud
  *   GET  /api/quickplay/matches/:id        -> a Quick Play match's state (participants only)
  *
  * A room code maps to a Durable Object by name, so every client using the same
@@ -58,6 +59,7 @@ import { d1PacketStore, handlePackets } from './packets';
 import { d1RatingStore, handleAdminSetElo, handleRatings } from './ratings';
 import { d1BracketStore, handleBrackets, type MatchRoomOpener } from './brackets';
 import { d1QuickPlayStore, handleQuickPlay, type QuickPlayRoomOpener } from './quickplay';
+import { handleTts, type TtsAi } from './tts';
 
 export { Room };
 
@@ -67,6 +69,8 @@ export interface Env extends RoomEnv {
   /** Shared secret for the Room DO's /__internal/close endpoint. Set with
    *  `wrangler secret put INTERNAL_SECRET` (see web/NOTES.md). */
   INTERNAL_SECRET?: string;
+  /** Workers AI, for neural read-aloud (/api/tts). */
+  AI?: TtsAi;
 }
 
 /**
@@ -155,6 +159,11 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS });
+    }
+
+    if (url.pathname === '/api/tts') {
+      const cache = typeof caches === 'undefined' ? null : caches.default;
+      return handleTts(request, env.AI, cache);
     }
 
     // Auth endpoints. Same-origin because Pages proxies /api to this Worker.

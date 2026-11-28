@@ -72,14 +72,23 @@ export function rateForWpm(wpm: number): number {
 }
 
 /**
- * Prefer a local English voice: local voices fire word `boundary` events
- * (network voices in Chrome do not), which is what lets the reader re-anchor
- * its clock to the audio.
+ * Fallback voice when the neural engine is unavailable: the most natural
+ * English voice the browser has. Edge's "Online (Natural)" and Chrome's
+ * "Google" voices are neural; the old local SAPI-style voices sound robotic
+ * and are the last resort.
  */
-function pickVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
+export function pickVoice(
+  voices: readonly SpeechSynthesisVoice[] = window.speechSynthesis.getVoices(),
+): SpeechSynthesisVoice | null {
   const english = voices.filter((v) => /^en(-|_|$)/i.test(v.lang));
+  const us = (v: SpeechSynthesisVoice) => /^en[-_]US$/i.test(v.lang);
+  const natural = (v: SpeechSynthesisVoice) => /natural|neural/i.test(v.name);
+  const google = (v: SpeechSynthesisVoice) => /^google/i.test(v.name);
   return (
+    english.find((v) => natural(v) && us(v)) ??
+    english.find(natural) ??
+    english.find((v) => google(v) && us(v)) ??
+    english.find(google) ??
     english.find((v) => v.localService && v.default) ??
     english.find((v) => v.localService) ??
     english[0] ??
@@ -87,13 +96,181 @@ function pickVoice(): SpeechSynthesisVoice | null {
   );
 }
 
+// --- Neural engine (Workers AI via /api/tts) --------------------------------
+
+/**
+ * Off under tests (they script the Web Speech API directly) and switched off
+ * for the session after the server says it can't do TTS, so a missing
+ * binding costs one request, not one per question.
+ */
+let neuralOn = typeof import.meta !== 'undefined' && import.meta.env?.MODE !== 'test';
+
+/** For tests and for a settings switch: use the neural engine or not. */
+export function setNeuralVoice(on: boolean): void {
+  neuralOn = on;
+}
+
+export function neuralVoiceOn(): boolean {
+  return neuralOn && typeof fetch === 'function' && typeof Audio !== 'undefined';
+}
+
+/** Recently synthesized clips by text, so a repeated prompt or replay is instant. */
+const clipCache = new Map<string, Promise<Blob>>();
+const CLIP_CACHE_MAX = 12;
+
+function fetchClip(text: string, signal?: AbortSignal): Promise<Blob> {
+  const hit = clipCache.get(text);
+  if (hit) return hit;
+  const p = fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text }),
+    signal,
+  }).then(async (r) => {
+    if (!r.ok) {
+      // Not configured / not deployed here: stop asking this session.
+      if (r.status === 404 || r.status === 405 || r.status === 501 || r.status === 503) {
+        neuralOn = false;
+      }
+      throw new Error(`tts ${r.status}`);
+    }
+    const blob = await r.blob();
+    if (!blob.type.startsWith('audio/') || blob.size === 0) throw new Error('tts: not audio');
+    return blob;
+  });
+  clipCache.set(text, p);
+  p.catch(() => clipCache.delete(text));
+  while (clipCache.size > CLIP_CACHE_MAX) {
+    const oldest = clipCache.keys().next().value;
+    if (oldest === undefined) break;
+    clipCache.delete(oldest);
+  }
+  return p;
+}
+
+/** Warms the cache for text that is about to be read (e.g. the next question). */
+export function prefetchSpeech(text: string): void {
+  if (neuralVoiceOn() && text.trim()) fetchClip(text.trim()).catch(() => {});
+}
+
+/**
+ * Interrupts the neural clip in flight, if any. Like a cancelled utterance,
+ * an interrupted reading still reports onEnd(false): callers wait on onEnd
+ * before opening the mic, so it must fire however the reading ends.
+ */
+let interruptCurrent: (() => void) | null = null;
+
 /** Stops anything being read. Safe to call when nothing is. */
 export function stopSpeaking(): void {
+  const interrupt = interruptCurrent;
+  interruptCurrent = null;
+  interrupt?.();
   if (canSpeak()) window.speechSynthesis.cancel();
 }
 
 /** Reads `text` aloud, replacing anything already being read. Returns a stop function. */
 export function speak(text: string, opts: SpeakOptions = {}): () => void {
+  stopSpeaking();
+  if (!neuralVoiceOn() || text.trim() === '') return speakBrowser(text, opts);
+  const { stop, interrupt } = speakNeural(text, opts);
+  interruptCurrent = interrupt;
+  return () => {
+    if (interruptCurrent === interrupt) interruptCurrent = null;
+    stop();
+  };
+}
+
+/**
+ * Plays the neural clip. No word boundaries come with it, so progress is
+ * reported as a char offset proportional to playback position — and pinned
+ * to 0 while the clip is still loading, so a reader clock synced to it
+ * doesn't run ahead of audio nobody has heard yet. Any failure before
+ * playback falls back to the browser voice.
+ */
+function speakNeural(
+  text: string,
+  opts: SpeakOptions,
+): { stop(): void; interrupt(): void } {
+  const rate = opts.rate ?? 1;
+  const ctrl = new AbortController();
+  let stopped = false;
+  let finished = false;
+  let audio: HTMLAudioElement | null = null;
+  let url: string | null = null;
+  let fallbackStop: (() => void) | null = null;
+
+  const hold = setInterval(() => opts.onBoundary?.(0), 100);
+  opts.onBoundary?.(0);
+  const cleanup = () => {
+    clearInterval(hold);
+    clearTimeout(loadTimer);
+    if (audio) {
+      audio.onplaying = audio.ontimeupdate = audio.onended = audio.onerror = null;
+      audio.pause();
+    }
+    if (url) URL.revokeObjectURL(url);
+  };
+  const finish = (completed: boolean) => {
+    if (finished || stopped) return;
+    finished = true;
+    cleanup();
+    opts.onEnd?.(completed);
+  };
+  const fallBack = () => {
+    if (finished || stopped || fallbackStop) return;
+    cleanup();
+    fallbackStop = speakBrowser(text, opts);
+  };
+  // Synthesis of a long tossup takes a second or two; past this, give up and
+  // let the browser voice read it rather than leave the player waiting.
+  const loadTimer = setTimeout(() => {
+    ctrl.abort();
+    fallBack();
+  }, 9000);
+
+  fetchClip(text.trim(), ctrl.signal)
+    .then((blob) => {
+      if (stopped || fallbackStop) return;
+      clearTimeout(loadTimer);
+      url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      audio = a;
+      a.playbackRate = rate;
+      (a as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+      let playing = false;
+      a.onplaying = () => {
+        playing = true;
+        clearInterval(hold);
+      };
+      a.ontimeupdate = () => {
+        if (!playing || !Number.isFinite(a.duration) || a.duration <= 0) return;
+        const frac = Math.min(1, a.currentTime / a.duration);
+        opts.onBoundary?.(Math.floor(frac * text.length));
+      };
+      a.onended = () => finish(true);
+      a.onerror = () => (playing ? finish(false) : fallBack());
+      a.play().catch(() => fallBack());
+    })
+    .catch(() => {
+      if (!ctrl.signal.aborted) fallBack();
+    });
+
+  return {
+    stop() {
+      stopped = true;
+      ctrl.abort();
+      cleanup();
+      fallbackStop?.();
+    },
+    interrupt() {
+      ctrl.abort();
+      // A browser fallback in flight ends via the synth.cancel() that follows.
+      if (!fallbackStop) finish(false);
+    },
+  };
+}
+
+function speakBrowser(text: string, opts: SpeakOptions): () => void {
   if (!canSpeak() || text.trim() === '') {
     opts.onEnd?.(false);
     return () => {};
