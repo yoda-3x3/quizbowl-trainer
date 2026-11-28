@@ -207,6 +207,35 @@
   top: 12px;
   right: 84px;
   z-index: 50;
+  /* A button that opens the leaderboard: strip native chrome, keep a
+     40px hit area, and give it the app's one press scale. */
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: transform var(--dur-fast) ease-out;
+}
+
+.topbar-rank::before {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: max(100%, 40px);
+  height: 40px;
+  transform: translate(-50%, -50%);
+}
+
+.topbar-rank:active {
+  transform: scale(0.96);
+}
+
+.topbar-rank:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 999px;
 }
 
 .app[data-ranked] .topbar {
