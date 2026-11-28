@@ -59,6 +59,9 @@ export interface Env {
   INTERNAL_SECRET?: string;
 }
 
+/** Set by index.ts on the websocket upgrade to the signed-in user's id. */
+export const USER_ID_HEADER = 'x-qb-user-id';
+
 const DEFAULT_WPM = 150;
 const MAX_PLAYERS = 12;
 /** How often the DO is allowed to re-touch the live-rooms row on heartbeat.
@@ -68,6 +71,8 @@ const HEARTBEAT_MS = 20_000;
 export class Room implements DurableObject {
   private room: RoomState;
   private sessions = new Map<WebSocket, string>();
+  /** Account id per socket, from the Worker-set USER_ID_HEADER on upgrade. */
+  private socketUsers = new Map<WebSocket, number>();
   private queue = new TossupQueue(defaultFilters());
   private wpm = DEFAULT_WPM;
   private lastActivity = Date.now();
@@ -120,6 +125,10 @@ export class Room implements DurableObject {
       const client = pair[0];
       const server = pair[1];
       server.accept();
+      // index.ts strips any client-sent copy of this header and sets it only
+      // after resolving the session cookie, so it can be trusted here.
+      const uid = Number(request.headers.get(USER_ID_HEADER));
+      if (Number.isSafeInteger(uid) && uid > 0) this.socketUsers.set(server, uid);
       this.wire(server);
       // Registering happens here (rather than on the first `join` message) so a
       // room that accepts a socket but is torn down before anyone names
@@ -217,7 +226,14 @@ export class Room implements DurableObject {
       const id = msg.playerId?.trim() || crypto.randomUUID();
       this.sessions.set(ws, id);
       const side: Side | undefined = msg.side === 'a' || msg.side === 'b' ? msg.side : undefined;
-      const out = join(this.room, id, String(msg.name ?? '').slice(0, 24), now, side);
+      const out = join(
+        this.room,
+        id,
+        String(msg.name ?? '').slice(0, 24),
+        now,
+        side,
+        this.socketUsers.get(ws),
+      );
       this.sendTo(ws, {
         t: 'welcome',
         playerId: id,
@@ -271,6 +287,7 @@ export class Room implements DurableObject {
   private async onClose(ws: WebSocket): Promise<void> {
     const playerId = this.sessions.get(ws);
     this.sessions.delete(ws);
+    this.socketUsers.delete(ws);
     if (!playerId) return;
     // Only mark away if they have no other socket open.
     const stillHere = [...this.sessions.values()].includes(playerId);

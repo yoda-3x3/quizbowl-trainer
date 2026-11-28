@@ -7,10 +7,13 @@
 import { Button, Sheet } from '../ui';
 import { useLeaderboard } from '../rank';
 import RankBadge from '../RankBadge';
+import { PlayerName, TagChips } from '../TagChips';
+import { useTags } from '../profile';
 import './Tournaments.css';
 
 export default function Leaderboard({ onExit }: { onExit(): void }) {
   const board = useLeaderboard(100);
+  const tags = useTags(board.entries.map((e) => e.user_id));
 
   return (
     <>
@@ -45,7 +48,10 @@ export default function Leaderboard({ onExit }: { onExit(): void }) {
               {board.entries.map((e) => (
                 <div key={e.user_id} className="leaderboard__row">
                   <span className="leaderboard__position">#{e.position}</span>
-                  <span className="leaderboard__name">{e.username}</span>
+                  <span className="leaderboard__name">
+                    <PlayerName name={e.username} userId={e.user_id} />{' '}
+                    <TagChips tags={tags[e.user_id]} max={3} />
+                  </span>
                   <RankBadge rating={e} variant="compact" />
                   <span className="leaderboard__elo tiny muted">{e.elo} ELO</span>
                 </div>

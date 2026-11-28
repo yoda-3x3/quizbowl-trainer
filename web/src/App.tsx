@@ -35,6 +35,8 @@ import { useShortcuts } from './shortcuts';
 import { directionBetween, flipPage } from './ui/pageFlip';
 import { useAuth } from './auth';
 import ThemeBackdrop from './ThemeBackdrop';
+import Profile from './screens/Profile';
+import { closeProfile, useProfileRoute, useStatsSync } from './profile';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -55,6 +57,10 @@ export default function App() {
   const auth = useAuth();
   const [settings] = useSettings();
   const theme = settings.theme;
+  // A profile (#/u/<id>) overlays whichever tab is open; the tab stays
+  // mounted underneath so a live room survives a look at someone's profile.
+  const profileId = useProfileRoute();
+  useStatsSync(auth.user?.id);
 
   // Every screen change slides the new page in: forward from a later tab or
   // into a practice mode, back to an earlier tab or out to the practice home.
@@ -87,6 +93,10 @@ export default function App() {
       },
       '?': () => setShowHelp((v) => !v),
       Escape: () => {
+        if (profileId !== null) {
+          closeProfile();
+          return;
+        }
         if (showHelp) {
           setShowHelp(false);
           return;
@@ -98,7 +108,7 @@ export default function App() {
         if (tab === 'practice' && practice !== 'home') toHome();
       },
     }),
-    [practice, showHelp, showAdmin, tab, isAdmin],
+    [practice, showHelp, showAdmin, tab, isAdmin, profileId],
   );
   useShortcuts(shortcuts);
 
@@ -121,9 +131,19 @@ export default function App() {
           it, React would just patch the existing DOM and no transition would
           fire. Each tab's own component is prop-driven from state that lives
           in App (practice/theme/etc.), so remounting it loses nothing. */}
+      {profileId !== null ? (
+        <div className="tab-page" key={`profile-${profileId}`}>
+          <Profile userId={profileId} onExit={closeProfile} />
+        </div>
+      ) : null}
       {/* The practice view is in the key too, so entering or leaving a
-          practice mode slides like a tab switch does. */}
-      <div className="tab-page" key={tab === 'practice' ? `practice:${practice}` : tab}>
+          practice mode slides like a tab switch does. The tab stays mounted
+          (hidden) under an open profile. */}
+      <div
+        className="tab-page"
+        key={tab === 'practice' ? `practice:${practice}` : tab}
+        style={profileId !== null ? { display: 'none' } : undefined}
+      >
         {tab === 'practice' ? (
           <Practice
             view={practice}
@@ -150,7 +170,14 @@ export default function App() {
 
       {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
 
-      <TabBar<TabId> items={TABS} active={tab} onSelect={setTab} />
+      <TabBar<TabId>
+        items={TABS}
+        active={tab}
+        onSelect={(t) => {
+          closeProfile();
+          setTab(t);
+        }}
+      />
       <div
         className="pre-alpha-badge"
         aria-label="This build is pre-alpha"

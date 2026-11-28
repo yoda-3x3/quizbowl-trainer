@@ -1,0 +1,115 @@
+.profile__head .sheet__head {
+  display: none;
+}
+
+/* `.sheet` is a flex column; the head is a row that wraps on phones. */
+.sheet.profile__head {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 200px;
+}
+
+.profile__name {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.profile__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 10px;
+}
+
+.profile__table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 4px 6px 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile__table td {
+  padding: 6px 6px 6px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+
+.profile__table tr:last-child td {
+  border-bottom: none;
+}
+
+.profile__cat {
+  font-weight: 600;
+}
+
+/* Accuracy cell doubles as a bar: --v is 0..1. */
+.profile__bar {
+  display: inline-block;
+  min-width: 56px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 30%, transparent) calc(var(--v, 0) * 100%),
+    transparent 0
+  );
+}
+
+.profile__rule {
+  margin-top: 10px;
+}
+
+.profile__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.profile__list + .profile__list {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.profile__won {
+  color: var(--good, #5fb36b);
+  font-weight: 600;
+}
+
+.profile__lost {
+  color: var(--bad, #e06c5a);
+  font-weight: 600;
+}
+
+.profile__power {
+  color: var(--gold, #d4af37);
+  font-weight: 700;
+}
+
+@media (max-width: 420px) {
+  .profile__table th:nth-child(2),
+  .profile__table td:nth-child(2) {
+    display: none;
+  }
+}
