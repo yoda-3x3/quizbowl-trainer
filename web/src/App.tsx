@@ -34,6 +34,8 @@ import { Button, Sheet, TabBar, useSettings, type TabItem } from './ui';
 import { useShortcuts } from './shortcuts';
 import { useAuth } from './auth';
 import ThemeBackdrop from './ThemeBackdrop';
+import RankBadge from './RankBadge';
+import { useMyRank } from './myRank';
 
 type TabId = 'practice' | 'learn' | 'rooms' | 'tournaments' | 'settings';
 type PracticeView = 'home' | PracticeMode;
@@ -54,6 +56,7 @@ export default function App() {
   const auth = useAuth();
   const [settings] = useSettings();
   const theme = settings.theme;
+  const myRank = useMyRank();
 
   const toHome = () => setPractice('home');
   const isAdmin = auth.user?.role === 'admin';
@@ -102,8 +105,11 @@ export default function App() {
   }
 
   return (
-    <div className="app" data-theme={theme}>
-      <ThemeBackdrop theme={theme} />
+    <div className="app" data-theme={theme} data-ranked={myRank ? '' : undefined}>
+      <ThemeBackdrop
+        theme={theme}
+        rank={myRank && settings.rankBackdrop ? myRank.rank : null}
+      />
       {/* `key={tab}` remounts this wrapper on every tab switch, which is
           what makes the entrance animation below replay each time — without
           it, React would just patch the existing DOM and no transition would
@@ -137,6 +143,11 @@ export default function App() {
       {showHelp ? <ShortcutsHelp onClose={() => setShowHelp(false)} isAdmin={isAdmin} /> : null}
 
       <TabBar<TabId> items={TABS} active={tab} onSelect={setTab} />
+      {myRank ? (
+        <div className="topbar-rank" data-testid="topbar-rank">
+          <RankBadge rating={myRank} variant="topbar" />
+        </div>
+      ) : null}
       <div
         className="pre-alpha-badge"
         aria-label="This build is pre-alpha"

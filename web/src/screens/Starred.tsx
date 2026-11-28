@@ -9,6 +9,7 @@
  * the wrong explanation here.
  */
 
+import RankLoader from '../RankLoader';
 import { useCallback, useEffect, useState } from 'react';
 import Tossup, { type TossupSource } from './Tossup';
 import { Button, Sheet } from '../ui';
@@ -79,9 +80,7 @@ export default function Starred({ onExit }: StarredProps) {
       </header>
       <div className="app__body">
         {phase === 'loading' ? (
-          <Sheet title="Loading">
-            <p className="tiny muted">Gathering your starred questions.</p>
-          </Sheet>
+          <RankLoader label="Gathering your starred questions" />
         ) : phase === 'empty' ? (
           <Sheet title="Nothing starred yet">
             <p className="tiny muted">

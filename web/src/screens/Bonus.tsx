@@ -9,6 +9,7 @@
  * the only offline source here.
  */
 
+import RankLoader from '../RankLoader';
 import {
   useCallback,
   useEffect,
@@ -354,6 +355,8 @@ export default function Bonus({ onExit, source }: BonusProps) {
             {offline ? ' / cached' : ''}
           </span>
         </div>
+
+        {loading && !current ? <RankLoader label="Loading bonuses" /> : null}
 
         {current && plan ? (
           <Sheet className={allCorrect ? 'bonus-sweep' : undefined}>

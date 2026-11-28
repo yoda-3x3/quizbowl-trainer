@@ -17,6 +17,7 @@ import {
   type AdminUser,
 } from '../../admin';
 import { fetchRating, setUserElo, type RatingPublic } from '../../rank';
+import RankBadge from '../../RankBadge';
 import { useAuth } from '../../auth';
 
 export default function AdminUsers() {
@@ -286,7 +287,14 @@ function RankEditor({ userId, disabled }: { userId: number; disabled: boolean })
 
   return (
     <span className="tiny muted" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      rank {rating ? `${rating.rank.label} · ${rating.elo} ELO` : 'unrated'}
+      {rating ? (
+        <>
+          <RankBadge rating={rating} variant="compact" plain />
+          {` · ${rating.elo} ELO`}
+        </>
+      ) : (
+        'rank unrated'
+      )}
       <Button
         small
         variant="ghost"
